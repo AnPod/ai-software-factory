@@ -2,6 +2,15 @@
 
 All notable changes to AI Werk Skills are recorded here.
 
+## [0.3.0] - 2026-11-19
+
+### Added
+
+- Stage 04 skills: `aiwerk-release`, `aiwerk-deploy-check` and `aiwerk-docs-sync`.
+- Stage 05 skills: `aiwerk-incident`, `aiwerk-incident-to-spec` and `aiwerk-slo`.
+- Brain schema TTL entries for `spec/release`, `spec/deploy`, `incident` and `slo`.
+- Layered stage 04 and 05 brain seeds, deterministic eval cases and good/bad stand-in agent tests for all 6 new skills.
+
 ## [0.2.0] - 2026-11-19
 
 ### Added

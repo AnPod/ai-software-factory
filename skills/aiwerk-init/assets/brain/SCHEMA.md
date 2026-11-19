@@ -38,7 +38,9 @@ Source prefixes: `git:<branch>@<commit>`, `file:<path>`, `mcp:<server>/<resource
 | `spec/tasks` | 14 | Task plans drift as code changes |
 | `spec/context`, `spec/dispatch`, `spec/sandbox` | 7 | Context and execution plans decay quickly |
 | `spec/review`, `spec/tests`, `spec/security`, `spec/policy` | 7 | Gate verdicts belong to the current diff |
-| `incident/*` | 7 | Operational context decays fast |
+| `spec/release`, `spec/deploy` | 7 | Release drafts and deploy checklists belong to the current change |
+| `incident`, `incident/*` | 7 | Operational context decays fast |
+| `slo` | 7 | SLO status and error budgets shift weekly |
 | `health` | 1 | Regenerated on every run |
 | `index` | 1 | Rewritten whenever a page changes |
 
@@ -64,4 +66,5 @@ When a skill needs a page whose age is greater than `ttl_days`, it tells the use
 - `aiwerk.md`: factory setup from `aiwerk-init`.
 - `landscape.md`: tools, MCP servers, CLIs and consent from `aiwerk-landscape`.
 - `project/`: what the project is, from `aiwerk-survey`.
+- `slo.md`: service level objectives and error budgets, from `aiwerk-slo`.
 - `decisions/`, `policies/`, `specs/`, `incidents/`: added by later skills.

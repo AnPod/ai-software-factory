@@ -127,6 +127,35 @@ CASES = {
         "prompt": "Use the aiwerk-policy skill to check the GH-12 diff against project policies." + NON_INTERACTIVE,
         "seed": "impl_branch",
     },
+    "release": {
+        "prompt": "Use the aiwerk-release skill to draft release notes, version bump and PR description for GH-12 against main."
+        + NON_INTERACTIVE,
+        "seed": "gated_branch",
+    },
+    "deploy-check": {
+        "prompt": "Use the aiwerk-deploy-check skill to build the pre-deploy checklist for GH-12 against main."
+        + NON_INTERACTIVE,
+        "seed": "gated_branch",
+    },
+    "docs-sync": {
+        "prompt": "Use the aiwerk-docs-sync skill to sync repository documentation and brain pages after the latest merged commit (HEAD~1..HEAD)."
+        + NON_INTERACTIVE,
+        "seed": "merged_docs",
+    },
+    "incident": {
+        "prompt": "Use the aiwerk-incident skill to triage the incident reported in docs/incident-alert.md and save it to .aiwerk/brain/incidents/2026-11-19-negative-discount-cap.md."
+        + NON_INTERACTIVE,
+        "seed": "incident_alert",
+    },
+    "incident-to-spec": {
+        "prompt": "Use the aiwerk-incident-to-spec skill to turn .aiwerk/brain/incidents/2026-11-19-negative-discount-cap.md into stage 01 ticket INC-01."
+        + NON_INTERACTIVE,
+        "seed": "resolved_incident",
+    },
+    "slo": {
+        "prompt": "Use the aiwerk-slo skill to summarise SLOs and error budgets for this project." + NON_INTERACTIVE,
+        "seed": "resolved_incident",
+    },
 }
 
 
@@ -310,6 +339,38 @@ SETUP_BODY_STAGES_1_TO_3 = """# Factory setup
 ## Assumptions
 - Seeded by the eval runner."""
 
+SETUP_BODY_ALL_STAGES = """# Factory setup
+
+## Harnesses
+- Interactive: Claude Code
+- Headless runner: Claude Code
+
+## Intake
+- Source of truth for specs: GitHub Issues
+
+## Triggers
+- manual: any skill
+
+## Stages
+| Stage | Autonomy | Notes |
+|---|---|---|
+| 01 Intake and context | suggest | |
+| 02 Orchestration | suggest | |
+| 03 Eval and governance | suggest | |
+| 04 Release | %s | |
+| 05 Operations | suggest | |
+
+## Sandboxing
+- local git worktree
+
+## Policies
+- No PII stored or logged in cart data.
+- New runtime dependencies require Apache-2.0 or MIT licence review.
+- Changes to src/tinyshop/payments.py require @alice approval.
+
+## Assumptions
+- Seeded by the eval runner."""
+
 LANDSCAPE_BODY = """# Tool landscape
 
 ## Sources
@@ -324,6 +385,24 @@ LANDSCAPE_BODY = """# Tool landscape
 | Stage | Missing | Options |
 |---|---|---|
 | 03 | Security scanner | Semgrep, Snyk, GitGuardian ggshield |"""
+
+LANDSCAPE_BODY_OPS = """# Tool landscape
+
+## Sources
+| Source | Kind | Stages | Detected in | Consent | Notes |
+|---|---|---|---|---|---|
+| GitHub | mcp | 01, 02, 04 | .mcp.json | not-asked | |
+| Datadog | mcp | 05 | interview | not-asked | |
+| PagerDuty | mcp | 05 | interview | ask | Sends pages |
+
+## Browser and computer use
+- not available
+
+## Gaps
+| Stage | Missing | Options |
+|---|---|---|
+| 03 | Security scanner | Semgrep, Snyk, GitGuardian ggshield |
+| 05 | Observability read access | Datadog, Grafana, Sentry |"""
 
 TICKET_BODY = """# GH-12: Apply a per-SKU discount cap
 
@@ -475,16 +554,104 @@ class Cart:
         return with_vat.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 '''
 
+DOCS_CART_MD = """# Cart pricing
+
+`LineItem` takes `sku`, `unit_price` and `quantity`.
+
+`Cart` applies a single cart-wide `discount_percent` equally to every line item, then adds 22% VAT and rounds half up to cents.
+"""
+
+INCIDENT_ALERT_MD = """# Alert: Checkout total spike on SKU-42 (2026-11-19)
+
+- **Detected (UTC):** 2026-11-19T14:12:00Z
+- **Service:** tinyshop checkout pricing
+- **Severity:** sev2
+- **Symptom:** Orders containing `SKU-42` produced totals higher than `subtotal * 1.22` after GH-12 shipped. A catalog sync passed `max_discount_percent=Decimal("-10")` on `LineItem`, which caused `Cart.total()` in `src/tinyshop/cart.py` to charge 110% before VAT instead of raising `ValueError`.
+- **Mitigated (UTC):** 2026-11-19T14:28:00Z (bad negative cap value removed from catalog feed for SKU-42).
+"""
+
+GATE_REVIEW_BODY = """# GH-12 adversarial review
+
+- **Reviewed range:** `main...HEAD`
+- **Verdict:** `pass`
+
+## Acceptance criteria check
+- Criteria 1 to 6 verified against `src/tinyshop/cart.py`."""
+
+GATE_TESTS_BODY = """# GH-12 test gate
+
+- **Command:** `make test` (`pytest -q`)
+- **Verdict:** `pass`
+
+## Coverage
+- Existing and new cart tests pass."""
+
+GATE_SECURITY_BODY = """# GH-12 security gate
+
+- **Mode:** manual checklist
+- **Scanners run:** none
+- **Verdict:** `warn`
+
+## Recommended scanner
+- Semgrep for Python static security checks."""
+
+GATE_POLICY_BODY = """# GH-12 policy gate
+
+- **Verdict:** `pass`
+
+## Rule results
+- P1 PII: pass
+- P2 Licence: pass
+- P4 Approvers: pass (`src/tinyshop/payments.py` untouched)."""
+
+RESOLVED_INCIDENT_BODY = """# Incident: Negative max_discount_percent inflated checkout totals
+
+- **Date (UTC):** `2026-11-19`
+- **Status:** `resolved`
+- **Severity:** `sev2`
+- **Affected modules:** `src/tinyshop/cart.py`
+- **Owner:** `@tinyshop/maintainers`
+
+## Summary
+After GH-12 shipped, a catalog sync passed `max_discount_percent=Decimal("-10")` to `LineItem`. Because `LineItem` lacked bounds validation, `Cart.total()` computed `1 - (-10 / 100) = 1.10`, inflating order totals by 10% before VAT until the catalog entry was removed.
+
+## Timeline (UTC)
+| Time (UTC) | Event | Source |
+|---|---|---|
+| `2026-11-19T14:12:00Z` | Alert fired on checkout total mismatch for SKU-42 | `file:docs/incident-alert.md` |
+| `2026-11-19T14:28:00Z` | Negative cap removed from catalog feed; totals returned to normal | `file:docs/incident-alert.md` |
+
+## Root-cause hypotheses
+1. **Missing 0..100 bounds validation on `LineItem.max_discount_percent`** (confidence: `high`)
+   - **Evidence:** `src/tinyshop/cart.py` defines `LineItem` without `__post_init__` validation, so negative or >100 values are accepted and applied directly in `Cart.total()`.
+   - **Fix needed:** Validate `0 <= max_discount_percent <= 100` in `LineItem.__post_init__`, raising `ValueError`, and add regression tests in `tests/test_cart.py`."""
+
 
 def seed(project, kind):
     if not kind:
         return
 
-    if kind == "impl_branch":
+    if kind in ("impl_branch", "gated_branch"):
         sh(["git", "checkout", "-q", "-b", "feat/gh-12"], project)
         write(os.path.join(project, "src", "tinyshop", "cart.py"), IMPL_CART_PY)
         sh(["git", "add", "src/tinyshop/cart.py"], project)
         sh(["git", "commit", "-q", "-m", "Add per-SKU discount cap to Cart"], project)
+
+    base_commit = None
+    if kind == "merged_docs":
+        write(os.path.join(project, "docs", "cart.md"), DOCS_CART_MD)
+        sh(["git", "add", "docs/cart.md"], project)
+        sh(["git", "commit", "-q", "-m", "Document cart pricing"], project)
+        base_commit = sh(["git", "rev-parse", "--short", "HEAD"], project).stdout.strip()
+        write(os.path.join(project, "src", "tinyshop", "cart.py"), IMPL_CART_PY)
+        sh(["git", "add", "src/tinyshop/cart.py"], project)
+        sh(["git", "commit", "-q", "-m", "Merge GH-12: add per-SKU max_discount_percent cap"], project)
+
+    if kind in ("incident_alert", "resolved_incident"):
+        write(os.path.join(project, "src", "tinyshop", "cart.py"), IMPL_CART_PY)
+        write(os.path.join(project, "docs", "incident-alert.md"), INCIDENT_ALERT_MD)
+        sh(["git", "add", "src/tinyshop/cart.py", "docs/incident-alert.md"], project)
+        sh(["git", "commit", "-q", "-m", "Deploy GH-12 cart cap and capture alert report"], project)
 
     brain = os.path.join(project, ".aiwerk", "brain")
     shutil.copytree(TEMPLATE, brain)
@@ -496,7 +663,7 @@ def seed(project, kind):
 
     commit = sh(["git", "rev-parse", "--short", "HEAD"], project).stdout.strip()
     branch = sh(["git", "branch", "--show-current"], project).stdout.strip() or "main"
-    git_src = "git:%s@%s" % (branch, commit)
+    git_src = "git:%s@%s" % (branch, base_commit or commit)
 
     stage_level = {
         "setup": 0,
@@ -507,9 +674,19 @@ def seed(project, kind):
         "context": 4,
         "tasks": 5,
         "impl_branch": 5,
+        "gated_branch": 6,
+        "merged_docs": 1,
+        "incident_alert": 1,
+        "resolved_incident": 7,
     }[kind]
 
-    setup_body = SETUP_BODY_BASIC if stage_level == 0 else SETUP_BODY_STAGES_1_TO_3
+    if kind in ("gated_branch", "merged_docs", "incident_alert", "resolved_incident"):
+        stage4_mode = "assist" if kind == "merged_docs" else "suggest"
+        setup_body = SETUP_BODY_ALL_STAGES % stage4_mode
+    else:
+        setup_body = SETUP_BODY_BASIC if stage_level == 0 else SETUP_BODY_STAGES_1_TO_3
+
+    landscape_body = LANDSCAPE_BODY_OPS if kind in ("incident_alert", "resolved_incident") else LANDSCAPE_BODY
     pages = [
         ("aiwerk.md", "Factory setup", "setup", now, "aiwerk-init", ["interview"], 90, "medium", setup_body),
     ]
@@ -524,7 +701,7 @@ def seed(project, kind):
     if stage_level >= 1:
         pages.extend([
             ("landscape.md", "Tool landscape", "landscape", now, "aiwerk-landscape",
-             ["file:.mcp.json"], 30, "medium", LANDSCAPE_BODY),
+             ["file:.mcp.json"], 30, "medium", landscape_body),
             ("project/overview.md", "Overview", "project/overview", now, "aiwerk-survey",
              [git_src, "file:README.md"], 14, "high",
              "# Overview\n\nSmall Python shopping cart library with discounts, VAT and a payment provider adapter."),
@@ -551,26 +728,47 @@ def seed(project, kind):
              "# Decisions\n\n- ADR 0001 (`docs/adr/0001-use-decimal-for-money.md`): use `decimal.Decimal` for money and round half up to cents."),
         ])
 
-    if stage_level >= 2:
+    if 2 <= stage_level <= 6:
         pages.append((
             "specs/GH-12/ticket.md", "GH-12: Apply a per-SKU discount cap", "spec/ticket", now,
             "aiwerk-intake", ["file:docs/issue-12.md"], 30, "high", TICKET_BODY,
         ))
-    if stage_level >= 3:
+    if 3 <= stage_level <= 6:
         pages.append((
             "specs/GH-12/spec.md", "GH-12 spec: Per-SKU discount cap", "spec", now,
             "aiwerk-spec", ["file:.aiwerk/brain/specs/GH-12/ticket.md", git_src], 30, "high", SPEC_BODY,
         ))
-    if stage_level >= 4:
+    if 4 <= stage_level <= 6:
         pages.append((
             "specs/GH-12/context.md", "GH-12 context pack", "spec/context", now,
             "aiwerk-context", ["file:.aiwerk/brain/specs/GH-12/spec.md", git_src], 7, "high", CONTEXT_BODY,
         ))
-    if stage_level >= 5:
+    if 5 <= stage_level <= 6:
         pages.append((
             "specs/GH-12/tasks.md", "GH-12 task plan", "spec/tasks", now,
             "aiwerk-plan", ["file:.aiwerk/brain/specs/GH-12/spec.md", "file:.aiwerk/brain/specs/GH-12/context.md", git_src],
             14, "high", TASKS_BODY,
+        ))
+    if stage_level == 6:
+        pages.extend([
+            ("policies/index.md", "Project policies", "policy/index", now, "aiwerk-policy",
+             ["file:.aiwerk/brain/aiwerk.md"], 90, "high",
+             "# Project policies\n\n- P1 PII: no PII in cart.\n- P2 Licence: Apache-2.0 or MIT.\n- P4 Approvers: `@alice` for `src/tinyshop/payments.py`."),
+            ("specs/GH-12/review.md", "GH-12 adversarial review", "spec/review", now, "aiwerk-review",
+             ["file:.aiwerk/brain/specs/GH-12/spec.md", git_src], 7, "high", GATE_REVIEW_BODY),
+            ("specs/GH-12/tests.md", "GH-12 test gate", "spec/tests", now, "aiwerk-test-gate",
+             ["file:.aiwerk/brain/specs/GH-12/spec.md", git_src], 7, "high", GATE_TESTS_BODY),
+            ("specs/GH-12/security.md", "GH-12 security gate", "spec/security", now, "aiwerk-security-gate",
+             ["file:.aiwerk/brain/landscape.md", git_src], 7, "medium", GATE_SECURITY_BODY),
+            ("specs/GH-12/policy.md", "GH-12 policy gate", "spec/policy", now, "aiwerk-policy",
+             ["file:.aiwerk/brain/policies/index.md", git_src], 7, "high", GATE_POLICY_BODY),
+        ])
+    if stage_level == 7:
+        pages.append((
+            "incidents/2026-11-19-negative-discount-cap.md",
+            "Incident: Negative max_discount_percent inflated checkout totals",
+            "incident", now, "aiwerk-incident",
+            ["file:docs/incident-alert.md", git_src], 7, "high", RESOLVED_INCIDENT_BODY,
         ))
 
     rows = []
@@ -617,11 +815,11 @@ class Checks:
         actual = frontmatter_value(read(p), "kind") if os.path.isfile(p) else None
         self.add("%s has kind %s" % (rel, expected), actual == expected, "got %r" % actual)
 
-    def only_brain_changed(self, allow=(".gitignore",)):
+    def only_brain_changed(self, allow=(".gitignore",), label="writes nothing outside .aiwerk/"):
         r = sh(["git", "status", "--porcelain", "--untracked-files=all"], self.project)
         changed = [line[3:] for line in r.stdout.splitlines() if line.strip()]
         outside = [c for c in changed if not c.startswith(".aiwerk/") and c not in allow]
-        self.add("writes nothing outside .aiwerk/", not outside, ", ".join(outside[:10]))
+        self.add(label, not outside, ", ".join(outside[:10]))
 
     def no_canary(self):
         leaked = [os.path.relpath(f, self.project) for f in brain_files(self.project) if CANARY in read(f)]
@@ -789,6 +987,78 @@ def check_case(name, project, output, before_hash):
         c.contains(p, r"licen[cs]e", "checks dependency licence policy")
         c.contains(p, r"approv|@alice|maintainers", "checks required approvers")
         c.contains(p, r"\b(pass|needs-approval|fail)\b", "assigns a policy verdict")
+        c.no_canary()
+        c.brain_valid()
+        c.only_brain_changed()
+    elif name == "release":
+        p = b + "specs/GH-12/release.md"
+        c.exists(p)
+        c.kind(p, "spec/release")
+        c.contains(p, r"0\.3\.0|0\.4\.0", "grounds version in pyproject.toml")
+        c.contains(p, r"\bminor\b", "suggests a minor semver bump")
+        c.contains(p, r"release\s+notes|##\s+Added", "includes release notes")
+        c.contains(p, r"spec\.md", "links to spec.md")
+        c.contains(p, r"review\.md|tests\.md|security\.md|policy\.md", "links to stage 03 gates")
+        c.no_canary()
+        c.brain_valid()
+        c.only_brain_changed()
+    elif name == "deploy-check":
+        p = b + "specs/GH-12/deploy.md"
+        c.exists(p)
+        c.kind(p, "spec/deploy")
+        c.contains(p, r"migration", "checks migrations")
+        c.contains(p, r"feature\s+flag", "checks feature flags")
+        c.contains(p, r"config|env", "checks config and env changes")
+        c.contains(p, r"\bCI\b|ci\.yml", "checks CI status")
+        c.contains(p, r"rollback", "defines a rollback trigger and plan")
+        c.contains(p, r"@tinyshop/maintainers|@alice", "names a deploy owner handle")
+        c.contains(p, r"\b(ready|needs-verification|blocked)\b", "assigns deploy readiness status")
+        c.no_canary()
+        c.brain_valid()
+        c.only_brain_changed()
+    elif name == "docs-sync":
+        c.contains("docs/cart.md", r"max_discount_percent|per-sku|discount\s+cap", "updates stale repo doc docs/cart.md")
+        c.contains(b + "project/architecture.md", r"max_discount_percent|per-sku|discount\s+cap", "refreshes brain page project/architecture.md")
+        c.contains(b + "log.md", r"aiwerk-docs-sync.*(refreshed|verified)", "logs refreshed or verified entries in log.md")
+        c.no_canary()
+        c.brain_valid()
+        c.only_brain_changed(
+            allow=(".gitignore", "README.md", "docs/cart.md"),
+            label="writes only to .aiwerk/ and allowed docs",
+        )
+    elif name == "incident":
+        p = b + "incidents/2026-11-19-negative-discount-cap.md"
+        c.exists(p)
+        c.kind(p, "incident")
+        c.contains(p, r"timeline", "builds an incident timeline")
+        c.contains(p, r"14:12|2026-11-19", "records UTC incident timestamps")
+        c.contains(p, r"hypothes", "lists root-cause hypotheses")
+        c.contains(p, r"cart\.py", "cites cart.py as evidence")
+        c.contains(p, r"max_discount_percent|LineItem", "identifies the missing cap validation")
+        c.contains(p, r"@tinyshop/maintainers|@alice", "identifies an owner handle")
+        c.no_canary()
+        c.brain_valid()
+        c.only_brain_changed()
+    elif name == "incident-to-spec":
+        p = b + "specs/INC-01/ticket.md"
+        c.exists(p)
+        c.kind(p, "spec/ticket")
+        c.contains(p, r"2026-11-19-negative-discount-cap\.md", "links back to the resolved incident")
+        c.contains(p, r"cart\.py", "names affected module cart.py")
+        c.contains(p, r"max_discount_percent|ValueError", "captures the root-cause fix requirement")
+        c.contains(p, r"prevent|regression|guardrail|test", "includes prevention or regression scope")
+        c.contains(p, r"raw\s+text|^>", "quotes raw incident excerpt")
+        c.no_canary()
+        c.brain_valid()
+        c.only_brain_changed()
+    elif name == "slo":
+        p = b + "slo.md"
+        c.exists(p)
+        c.kind(p, "slo")
+        c.contains(p, r"not\s+connected|unavailable|no\s+live|none\s+connected", "reports missing live telemetry honestly")
+        c.contains(p, r"error\s+budget", "addresses error budgets")
+        c.contains(p, r"cart|payment|incident|negative-discount-cap", "grounds SLOs in project modules or incidents")
+        c.contains(p, r"datadog|grafana|prometheus|sentry|splunk", "references or recommends an observability tool")
         c.no_canary()
         c.brain_valid()
         c.only_brain_changed()

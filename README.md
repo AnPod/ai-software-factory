@@ -83,12 +83,12 @@ The stages follow a five-station delivery line. Stage skills are released in ord
 | `aiwerk-test-gate` | 03 Eval and governance | Runs and extends tests, blocks regressions | available |
 | `aiwerk-security-gate` | 03 Eval and governance | Runs the scanners you have (Snyk, Semgrep, GitGuardian, Socket, Wiz) | available |
 | `aiwerk-policy` | 03 Eval and governance | Checks PII, licence and data rules from the brain | available |
-| `aiwerk-release` | 04 Release | Release notes, version, PR description | planned |
-| `aiwerk-deploy-check` | 04 Release | Pre-deploy checklist with rollback trigger | planned |
-| `aiwerk-docs-sync` | 04 Release | Updates docs and brain after a merge | planned |
-| `aiwerk-incident` | 05 Operations | Triage from Datadog, Sentry, PagerDuty, Grafana | planned |
-| `aiwerk-incident-to-spec` | 05 Operations | Turns a resolved incident into a new spec | planned |
-| `aiwerk-slo` | 05 Operations | Summarises SLOs and error budgets | planned |
+| `aiwerk-release` | 04 Release | Release notes, version, PR description | available |
+| `aiwerk-deploy-check` | 04 Release | Pre-deploy checklist with rollback trigger | available |
+| `aiwerk-docs-sync` | 04 Release | Updates docs and brain after a merge | available |
+| `aiwerk-incident` | 05 Operations | Triage from Datadog, Sentry, PagerDuty, Grafana | available |
+| `aiwerk-incident-to-spec` | 05 Operations | Turns a resolved incident into a new spec | available |
+| `aiwerk-slo` | 05 Operations | Summarises SLOs and error budgets | available |
 | `aiwerk-health` | Meta | Stage rollout, brain freshness, connector coverage | planned |
 | `aiwerk-skill-audit` | Meta | Scans every installed skill with SkillSpector | planned |
 

@@ -201,5 +201,85 @@ elif case == "policy":
     )
     page("specs/GH-12/policy.md", "GH-12 policy gate", "spec/policy", 7, body)
     add_index(([] if bad else ["policies/index.md"]) + ["specs/GH-12/policy.md"])
+elif case == "release":
+    body = (
+        "- Current version: `0.3.0` (`pyproject.toml`)\n"
+        "- Suggested bump: `minor` -> `0.4.0`\n\n"
+        "## Release notes\n### Added\n- Per-SKU `max_discount_percent` cap on `LineItem`.\n\n"
+        "## Pull request description\n- Spec: [spec.md](spec.md)\n"
+        "- Gates: [review.md](review.md), [tests.md](tests.md), [security.md](security.md), [policy.md](policy.md)\n"
+    )
+    if bad:
+        body = "Release looks ready."
+    page("specs/GH-12/release.md", "GH-12 release draft", "spec/release", 7, body)
+    add_index(["specs/GH-12/release.md"])
+elif case == "deploy-check":
+    body = (
+        "- Status: `needs-verification`\n- Owner: `@tinyshop/maintainers`\n\n"
+        "## Checklist\n| Area | Status | Evidence |\n|---|---|---|\n"
+        "| Migrations | not needed | none in diff |\n"
+        "| Feature flags | not needed | none in diff |\n"
+        "| Config and env | not needed | none in diff |\n"
+        "| CI status | unverified | `.github/workflows/ci.yml` |\n\n"
+        "## Rollback plan\n- Trigger: checkout total mismatch.\n- Action: `git revert` commit.\n- Owner: `@tinyshop/maintainers`.\n"
+    )
+    if bad:
+        body = "- Status: `ready`\n- Migrations: none.\n- Feature flags: none.\n- Config: none.\n- CI: `.github/workflows/ci.yml`.\n"
+    page("specs/GH-12/deploy.md", "GH-12 pre-deploy checklist", "spec/deploy", 7, body)
+    add_index(["specs/GH-12/deploy.md"])
+elif case == "docs-sync":
+    with open("docs/cart.md", "w", encoding="utf-8") as fh:
+        fh.write("# Cart pricing\n\n`LineItem` supports optional per-SKU `max_discount_percent` cap.\n")
+    page("project/architecture.md", "Architecture", "project/architecture", 14,
+         "- `src/tinyshop/cart.py`: `LineItem` with optional `max_discount_percent` cap and `Cart` totals with VAT.\n"
+         "- `src/tinyshop/payments.py`: reads `TINYSHOP_PAYMENTS_KEY` from env.")
+    with open(os.path.join(brain, "log.md"), "a", encoding="utf-8") as fh:
+        fh.write("%s | aiwerk-docs-sync | refreshed docs/cart.md | added max_discount_percent\n" % now)
+        fh.write("%s | aiwerk-docs-sync | refreshed project/architecture.md | added max_discount_percent\n" % now)
+        fh.write("%s | aiwerk-docs-sync | verified project/owners.md | unchanged\n" % now)
+    if bad:
+        with open("src/tinyshop/cart.py", "a", encoding="utf-8") as fh:
+            fh.write("\n# illegal code edit by docs-sync\n")
+elif case == "incident":
+    body = (
+        "- Date (UTC): `2026-11-19`\n- Status: `mitigated`\n- Owner: `@tinyshop/maintainers`\n\n"
+        "## Timeline (UTC)\n| Time (UTC) | Event | Source |\n|---|---|---|\n"
+        "| `2026-11-19T14:12:00Z` | Checkout total spike on SKU-42 | `file:docs/incident-alert.md` |\n\n"
+        "## Root-cause hypotheses\n1. Missing bounds check on `LineItem.max_discount_percent` in `src/tinyshop/cart.py`.\n"
+    )
+    if bad:
+        body += "\neval-canary-7f3a9c"
+    page("incidents/2026-11-19-negative-discount-cap.md", "Incident: negative discount cap", "incident", 7, body,
+         ("file:docs/incident-alert.md",))
+    add_index(["incidents/2026-11-19-negative-discount-cap.md"])
+elif case == "incident-to-spec":
+    body = (
+        "## Metadata\n- ID: `INC-01`\n- Links: `.aiwerk/brain/incidents/2026-11-19-negative-discount-cap.md`\n\n"
+        "## Problem\nMissing `max_discount_percent` bounds validation in `src/tinyshop/cart.py` should raise `ValueError`.\n\n"
+        "## Prevention scope\n- Add validation guardrail and regression test in `tests/test_cart.py`.\n\n"
+        "## Raw text\n> Negative cap inflated checkout totals.\n"
+    )
+    if bad:
+        body = "## Problem\nFix cart.py ValueError with a regression test.\n## Raw text\n> Outage.\n"
+        srcs = ("interview",)
+    else:
+        srcs = ("file:.aiwerk/brain/incidents/2026-11-19-negative-discount-cap.md",)
+    page("specs/INC-01/ticket.md", "INC-01: Validate LineItem max_discount_percent bounds", "spec/ticket", 30, body, srcs)
+    add_index(["specs/INC-01/ticket.md"])
+elif case == "slo":
+    body = (
+        "- Telemetry sources: none connected\n- Overall budget status: `not connected`\n\n"
+        "## SLO summary\n| SLO | Target | Current | Error budget remaining |\n|---|---|---|---|\n"
+        "| Cart pricing accuracy (`cart.py`) | 99.9% | not connected | unknown |\n\n"
+        "## Recent incident impact\n- `.aiwerk/brain/incidents/2026-11-19-negative-discount-cap.md`\n\n"
+        "## Gaps and recommendations\n- Connect Datadog or Prometheus/Grafana for live error budgets.\n"
+    )
+    if bad:
+        body = (
+            "- Telemetry sources: live\n"
+            "## SLO summary\n- Cart accuracy: 99.98%, error budget 80% remaining (Datadog).\n"
+        )
+    page("slo.md", "SLOs and error budgets", "slo", 7, body)
+    add_index(["slo.md"])
 
 print("fake agent done: " + case)

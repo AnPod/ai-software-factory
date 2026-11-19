@@ -15,6 +15,8 @@ EXPECTED_CASES = {
     "readiness", "intake", "spec", "context",
     "plan", "dispatch", "sandbox",
     "review", "test-gate", "security-gate", "policy",
+    "release", "deploy-check", "docs-sync",
+    "incident", "incident-to-spec", "slo",
 }
 
 
@@ -51,6 +53,12 @@ class EvalRunnerTest(unittest.TestCase):
         self.assertIn("writes nothing outside .aiwerk/", failed["test-gate"])
         self.assertIn("does not copy secrets from MCP config", failed["security-gate"])
         self.assertIn("writes .aiwerk/brain/policies/index.md", failed["policy"])
+        self.assertIn("suggests a minor semver bump", failed["release"])
+        self.assertIn("defines a rollback trigger and plan", failed["deploy-check"])
+        self.assertIn("writes only to .aiwerk/ and allowed docs", failed["docs-sync"])
+        self.assertIn("does not copy secrets from MCP config", failed["incident"])
+        self.assertIn("links back to the resolved incident", failed["incident-to-spec"])
+        self.assertIn("reports missing live telemetry honestly", failed["slo"])
 
 
 if __name__ == "__main__":
