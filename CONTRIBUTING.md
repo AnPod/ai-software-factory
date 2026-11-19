@@ -21,3 +21,14 @@ bash tests/test_install.sh
 ```
 
 New skills need a row in the README skill table and, when they write to the brain, an eval case in `evals/run_evals.py`.
+
+## Maintenance
+
+Tool versions are pinned in the workflow files:
+
+- `.github/workflows/skillspector.yml`: `SKILLSPECTOR_REF` (currently `v2.13.6`)
+- `.github/workflows/evals.yml`: `COPILOT_CLI_VERSION` (currently `1.0.105`) and `CLAUDE_CODE_VERSION` (currently `2.1.328`)
+
+When bumping a version pin, pick a release that is at least two weeks old so supply-chain issues have time to surface.
+
+The `COPILOT_GITHUB_TOKEN` Actions secret is a fine-grained token with an expiry date. Rotate it before it expires.
