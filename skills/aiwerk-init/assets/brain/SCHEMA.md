@@ -1,0 +1,63 @@
+# Brain schema
+
+This folder is the project's memory for coding agents. Every aiwerk skill reads `index.md` first, uses the pages it needs, and writes what it learns back here. Humans can read and edit every page.
+
+## Page format
+
+Every page except `SCHEMA.md` and `log.md` starts with this frontmatter:
+
+```yaml
+---
+title: Payments service          # human-readable name
+kind: project/service            # see kinds below
+gathered_at: 2026-11-19T10:42:00Z  # UTC, when the content was last gathered or verified
+gathered_by: aiwerk-survey       # skill (and harness, optional) that wrote it
+sources:                         # where the content came from, never secrets
+  - git:main@27c54c6
+  - file:docs/architecture.md
+  - mcp:atlassian/confluence:PAY
+ttl_days: 14                     # after this many days the page counts as stale
+confidence: medium               # low | medium | high
+---
+```
+
+Source prefixes: `git:<branch>@<commit>`, `file:<path>`, `mcp:<server>/<resource>`, `cli:<tool> <subcommand>`, `url:<address>`, `interview`.
+
+## Default time to live
+
+| Kind | ttl_days | Why |
+|---|---|---|
+| `setup` (aiwerk.md) | 90 | Team choices change slowly |
+| `landscape` | 30 | Tools and MCP servers change monthly |
+| `project/*` overview, stack, architecture | 14 | Code moves fast |
+| `project/commands` | 14 | Build and test commands drift |
+| `project/owners` | 60 | Teams change slowly |
+| `policy/*` | 90 | Reviewed quarterly |
+| `decision/*` | 180 | Decisions are durable until superseded |
+| `spec/*` | 30 | Specs go stale when not picked up |
+| `incident/*` | 7 | Operational context decays fast |
+| `health` | 1 | Regenerated on every run |
+| `index` | 1 | Rewritten whenever a page changes |
+
+A skill may choose a different `ttl_days` when it has a reason, and says why in the page.
+
+## Staleness rule
+
+When a skill needs a page whose age is greater than `ttl_days`, it tells the user the page name and its age and asks: refresh now, or use as is. In non-interactive mode it uses the page as is and says so in its output.
+
+## Rules for every page
+
+- Cite sources. A statement without a source gets `confidence: low`.
+- Never store secrets, tokens, passwords, private keys or personal data. Point to where something lives instead.
+- Keep pages under about 150 lines. Split large topics.
+- A `## Human notes` section belongs to humans. Skills never edit or delete it.
+- When content is re-checked and still correct, update `gathered_at` and add a log line saying it was verified.
+
+## Files
+
+- `index.md`: catalogue of every page with kind, age and owner skill. Read first.
+- `log.md`: append-only history, one line per change: `<time> | <skill> | <action> | <details>`.
+- `aiwerk.md`: factory setup from `aiwerk-init`.
+- `landscape.md`: tools, MCP servers, CLIs and consent from `aiwerk-landscape`.
+- `project/`: what the project is, from `aiwerk-survey`.
+- `decisions/`, `policies/`, `specs/`, `incidents/`: added by later skills.

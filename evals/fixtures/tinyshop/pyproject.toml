@@ -1,0 +1,12 @@
+[project]
+name = "tinyshop"
+version = "0.3.0"
+description = "Shopping cart with discounts and VAT"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[tool.ruff]
+line-length = 100

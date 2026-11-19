@@ -1,0 +1,39 @@
+"""Self-test for evals/run_evals.py: a fake agent must pass every case, a misbehaving one must fail."""
+
+import json
+import os
+import subprocess
+import sys
+import unittest
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+RUNNER = os.path.join(ROOT, "evals", "run_evals.py")
+FAKE = "%s %s" % (sys.executable, os.path.join(ROOT, "tests", "fake_agent.py"))
+
+
+def run(mode):
+    env = dict(os.environ, FAKE_AGENT_MODE=mode)
+    env.pop("GITHUB_STEP_SUMMARY", None)
+    r = subprocess.run([sys.executable, RUNNER, "--agent-cmd", FAKE], cwd=ROOT, env=env,
+                       capture_output=True, text=True, timeout=300)
+    with open(os.path.join(ROOT, "evals", "results", "results.json"), encoding="utf-8") as fh:
+        return r, json.load(fh)
+
+
+class EvalRunnerTest(unittest.TestCase):
+    def test_good_agent_passes_all_cases(self):
+        r, data = run("good")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual({x["case"] for x in data["results"]}, {"init", "landscape", "survey", "refresh"})
+
+    def test_bad_agent_is_caught(self):
+        r, data = run("bad")
+        self.assertEqual(r.returncode, 1)
+        failed = {x["case"]: [c["check"] for c in x["checks"] if not c["ok"]] for x in data["results"]}
+        self.assertIn("writes nothing outside .aiwerk/", failed["init"])
+        self.assertIn("does not copy secrets from MCP config", failed["landscape"])
+        self.assertIn("report-only mode changes no pages", failed["refresh"])
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONDONTWRITEBYTECODE: "1"
+
+jobs:
+  checks:
+    name: Skills, brain and unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate skill format
+        run: python3 scripts/validate_skills.py
+      - name: Validate brain template
+        run: python3 skills/aiwerk-refresh/scripts/brain_status.py skills/aiwerk-init/assets/brain --template --strict
+      - name: Unit tests (brain checker, eval runner with a stand-in agent)
+        run: python3 -m unittest discover -s tests -v
+      - name: ShellCheck
+        run: shellcheck install.sh tests/test_install.sh
+
+  installer:
+    name: Installer on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install, re-run, copy and uninstall in temporary projects
+        run: bash tests/test_install.sh

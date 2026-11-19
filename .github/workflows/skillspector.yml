@@ -1,0 +1,83 @@
+name: SkillSpector scan
+
+# Static security scan of every skill with NVIDIA SkillSpector.
+# The gate fails unless every skill is rated SAFE and the scan is complete.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 5 * * 1"   # weekly, Monday 05:17 UTC, to pick up new rules
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  SKILLSPECTOR_REF: v2.13.6
+  PYTHONDONTWRITEBYTECODE: "1"
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write          # attach the report to releases
+      security-events: write   # upload SARIF to code scanning
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install SkillSpector ${{ env.SKILLSPECTOR_REF }}
+        run: pipx install --python python3.13 "git+https://github.com/NVIDIA/skillspector.git@${SKILLSPECTOR_REF}"
+      - name: Scan (static analysis, no LLM)
+        run: |
+          mkdir -p reports
+          set +e
+          skillspector scan skills/ --recursive --no-llm --fail-on-incomplete --format json --output reports/skillspector.json
+          echo "scan_exit=$?" >> "$GITHUB_ENV"
+          skillspector scan skills/ --recursive --no-llm --format sarif --output reports/skillspector.sarif
+          skillspector scan skills/ --recursive --no-llm --format markdown --output reports/skillspector.md
+          exit 0
+      - name: "Gate: every skill must be SAFE"
+        run: |
+          python3 - <<'PY'
+          import json, os, sys
+          d = json.load(open("reports/skillspector.json"))
+          rows = ["| Skill | Score | Verdict | Findings |", "|---|---|---|---|"]
+          bad = []
+          for s in d["skills"]:
+              verdict = s["risk_assessment"]["recommendation"]
+              ids = ", ".join(sorted({i["id"] + " " + i["severity"].lower() for i in s["issues"]})) or "none"
+              rows.append("| `%s` | %s | %s | %s |" % (s["name"], s["risk_score"], verdict, ids))
+              if verdict != "SAFE":
+                  bad.append(s["name"])
+          done = d["analysis_completeness"]["status"]
+          summary = "## SkillSpector %s\n\nMax score %s, overall %s, analysis %s.\n\n%s\n" % (
+              os.environ["SKILLSPECTOR_REF"], d["max_risk_score"], d["risk_recommendation"], done, "\n".join(rows))
+          open(os.environ["GITHUB_STEP_SUMMARY"], "a").write(summary)
+          print(summary)
+          if bad or os.environ.get("scan_exit") != "0":
+              sys.exit("Not SAFE: %s (scan exit %s)" % (", ".join(bad) or "-", os.environ.get("scan_exit")))
+          PY
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: skillspector-report
+          path: reports/
+      - name: Upload SARIF to code scanning
+        if: always() && github.event_name != 'pull_request'
+        continue-on-error: true   # needs code scanning enabled (free for public repositories)
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: reports/skillspector.sarif
+          category: skillspector
+      - name: Attach report to the release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" reports/skillspector.json reports/skillspector.md --clobber
