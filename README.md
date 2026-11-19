@@ -145,6 +145,6 @@ Issues and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for
 
 ## About
 
-AI Werk Skills is maintained by [AI WERK](https://aiwerk.se), a software engineering consultancy in Ljubljana that builds governed software factories for engineering teams. These skills are the open, single-repository version of that work. Teams that want it across many repositories, with their own integrations, hardened access and a shared brain, sometimes ask us to set it up with them.
+AI Werk Skills is maintained by [AI WERK](https://aiwerk.si), a software engineering consultancy in Ljubljana that builds governed software factories for engineering teams. These skills are the open, single-repository version of that work. Teams that want it across many repositories, with their own integrations, hardened access and a shared brain, sometimes ask us to set it up with them.
 
 Licensed under the [Apache License 2.0](LICENSE).
