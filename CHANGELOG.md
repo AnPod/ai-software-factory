@@ -2,6 +2,17 @@
 
 All notable changes to AI Werk Skills are recorded here.
 
+## [0.2.0] - 2026-11-19
+
+### Added
+
+- Stage 01 skills: `aiwerk-readiness`, `aiwerk-intake`, `aiwerk-spec` and `aiwerk-context`.
+- Stage 02 skills: `aiwerk-plan`, `aiwerk-dispatch` and `aiwerk-sandbox`.
+- Stage 03 skills: `aiwerk-review`, `aiwerk-test-gate`, `aiwerk-security-gate` and `aiwerk-policy`.
+- Brain schema TTL entries for `project/readiness`, `spec`, `spec/ticket`, `spec/tasks`, `spec/context`, `spec/dispatch`, `spec/sandbox`, `spec/review`, `spec/tests`, `spec/security` and `spec/policy`.
+- Fixture request `evals/fixtures/tinyshop/docs/issue-12.md` ("Apply a per-SKU discount cap") and layered brain seeds plus a feature-branch diff seed in `evals/run_evals.py`.
+- Deterministic eval cases and good/bad stand-in agent tests for all 11 new skills.
+
 ## [0.1.0] - 2026-11-19
 
 ### Added

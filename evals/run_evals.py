@@ -42,6 +42,7 @@ CLAUDE_TOOLS = [
     "Read", "Write", "Edit", "Glob", "Grep", "Skill",
     "Bash(git:*)", "Bash(ls:*)", "Bash(python3:*)", "Bash(command -v:*)", "Bash(mkdir:*)",
     "Bash(cp:*)", "Bash(date:*)", "Bash(cat:*)", "Bash(find:*)", "Bash(wc:*)", "Bash(head:*)",
+    "Bash(pytest:*)", "Bash(make test)", "Bash(make lint)",
 ]
 
 # Copilot CLI denies every tool that no rule allows when it runs non-interactively.
@@ -49,6 +50,7 @@ CLAUDE_TOOLS = [
 COPILOT_TOOLS = [
     "write", "shell(git:*)", "shell(ls:*)", "shell(python3:*)", "shell(command:*)", "shell(mkdir:*)",
     "shell(cp:*)", "shell(date:*)", "shell(cat:*)", "shell(find:*)", "shell(wc:*)", "shell(head:*)",
+    "shell(pytest:*)", "shell(make test)", "shell(make lint)",
 ]
 COPILOT_DENY = ["shell(git push)", "shell(git remote)", "shell(curl)", "shell(wget)"]
 TOKEN_VARS = "COPILOT_GITHUB_TOKEN,GH_TOKEN,GITHUB_TOKEN,ANTHROPIC_API_KEY"
@@ -79,6 +81,52 @@ CASES = {
         "prompt": "Use the aiwerk-refresh skill to check the brain. Report only, do not change any pages.",
         "seed": "stale",
     },
+    "readiness": {
+        "prompt": "Use the aiwerk-readiness skill to score agent readiness for this project." + NON_INTERACTIVE,
+        "seed": "surveyed",
+    },
+    "intake": {
+        "prompt": "Use the aiwerk-intake skill to capture the request in docs/issue-12.md as ticket GH-12."
+        + NON_INTERACTIVE,
+        "seed": "surveyed",
+    },
+    "spec": {
+        "prompt": "Use the aiwerk-spec skill to write a specification for GH-12." + NON_INTERACTIVE,
+        "seed": "ticket",
+    },
+    "context": {
+        "prompt": "Use the aiwerk-context skill to assemble the minimal context pack for GH-12." + NON_INTERACTIVE,
+        "seed": "spec",
+    },
+    "plan": {
+        "prompt": "Use the aiwerk-plan skill to break spec GH-12 into tasks." + NON_INTERACTIVE,
+        "seed": "context",
+    },
+    "dispatch": {
+        "prompt": "Use the aiwerk-dispatch skill to prepare headless dispatch commands for GH-12." + NON_INTERACTIVE,
+        "seed": "tasks",
+    },
+    "sandbox": {
+        "prompt": "Use the aiwerk-sandbox skill to prepare the sandbox plan for GH-12." + NON_INTERACTIVE,
+        "seed": "tasks",
+    },
+    "review": {
+        "prompt": "Use the aiwerk-review skill to review the GH-12 diff against main." + NON_INTERACTIVE,
+        "seed": "impl_branch",
+    },
+    "test-gate": {
+        "prompt": "Use the aiwerk-test-gate skill to run the test gate for GH-12." + NON_INTERACTIVE,
+        "seed": "impl_branch",
+    },
+    "security-gate": {
+        "prompt": "Use the aiwerk-security-gate skill to run the security gate for GH-12 against main."
+        + NON_INTERACTIVE,
+        "seed": "impl_branch",
+    },
+    "policy": {
+        "prompt": "Use the aiwerk-policy skill to check the GH-12 diff against project policies." + NON_INTERACTIVE,
+        "seed": "impl_branch",
+    },
 }
 
 
@@ -106,7 +154,7 @@ def write(path, text):
 
 def frontmatter_value(text, key):
     m = re.search(r"^%s:\s*(.+)$" % re.escape(key), text, re.M)
-    return m.group(1).strip() if m else None
+    return m.group(1).strip().strip("'\"") if m else None
 
 
 def tree_hash(folder):
@@ -128,6 +176,43 @@ def brain_files(project):
     return out
 
 
+def count_context_entries(text):
+    """Count context pack entries outside Excluded, Assumptions and Human notes."""
+    in_frontmatter = False
+    skip_section = False
+    in_table = False
+    count = 0
+    for i, raw in enumerate(text.splitlines()):
+        line = raw.strip()
+        if i == 0 and line == "---":
+            in_frontmatter = True
+            continue
+        if in_frontmatter:
+            if line == "---":
+                in_frontmatter = False
+            continue
+        if line.startswith("## "):
+            heading = line[3:].strip().lower()
+            skip_section = heading in ("excluded", "assumptions", "human notes")
+            in_table = False
+            continue
+        if skip_section or not line:
+            continue
+        if line.startswith("|"):
+            if re.match(r"^\|\s*[-:]+", line):
+                in_table = True
+                continue
+            if not in_table:
+                continue
+            count += 1
+        elif re.match(r"^(\d+\.|-)\s+", line):
+            low = line.lower()
+            if low in ("- none", "- none."):
+                continue
+            count += 1
+    return count
+
+
 # ---------------------------------------------------------------- setup
 
 def make_project(workdir, harness):
@@ -147,18 +232,23 @@ def make_project(workdir, harness):
     return project
 
 
-SETUP_PAGE = """---
-title: Factory setup
-kind: setup
-gathered_at: {now}
-gathered_by: aiwerk-init
-sources:
-  - interview
-ttl_days: 90
-confidence: medium
----
+def make_page(title, kind, gathered_at, gathered_by, sources, ttl_days, confidence, body):
+    src = "".join("  - %s\n" % s for s in sources)
+    return (
+        "---\n"
+        "title: %s\n"
+        "kind: %s\n"
+        "gathered_at: %s\n"
+        "gathered_by: %s\n"
+        "sources:\n%s"
+        "ttl_days: %d\n"
+        "confidence: %s\n"
+        "---\n\n%s\n\n## Human notes\n<!-- Skills never edit this section. -->\n"
+        % (title, kind, gathered_at, gathered_by, src, ttl_days, confidence, body.strip())
+    )
 
-# Factory setup
+
+SETUP_BODY_BASIC = """# Factory setup
 
 ## Harnesses
 - Interactive: Claude Code
@@ -186,35 +276,216 @@ confidence: medium
 - none recorded
 
 ## Assumptions
-- Seeded by the eval runner.
+- Seeded by the eval runner."""
 
-## Human notes
-<!-- Skills never edit this section. -->
-"""
+SETUP_BODY_STAGES_1_TO_3 = """# Factory setup
 
-STALE_PAGE = """---
-title: Stack
-kind: project/stack
-gathered_at: {when}
-gathered_by: aiwerk-survey
-sources:
-  - file:pyproject.toml
-ttl_days: 14
-confidence: high
----
+## Harnesses
+- Interactive: Claude Code
+- Headless runner: Claude Code
 
-# Stack
+## Intake
+- Source of truth for specs: GitHub Issues
 
-- Python 3.11+, no runtime dependencies. pytest and ruff for development.
+## Triggers
+- manual: any skill
 
-## Human notes
-<!-- Skills never edit this section. -->
-"""
+## Stages
+| Stage | Autonomy | Notes |
+|---|---|---|
+| 01 Intake and context | suggest | |
+| 02 Orchestration | suggest | |
+| 03 Eval and governance | suggest | |
+| 04 Release | off | |
+| 05 Operations | off | |
+
+## Sandboxing
+- local git worktree
+
+## Policies
+- No PII stored or logged in cart data.
+- New runtime dependencies require Apache-2.0 or MIT licence review.
+- Changes to src/tinyshop/payments.py require @alice approval.
+
+## Assumptions
+- Seeded by the eval runner."""
+
+LANDSCAPE_BODY = """# Tool landscape
+
+## Sources
+| Source | Kind | Stages | Detected in | Consent | Notes |
+|---|---|---|---|---|---|
+| GitHub | mcp | 01, 02, 04 | .mcp.json | not-asked | |
+
+## Browser and computer use
+- not available
+
+## Gaps
+| Stage | Missing | Options |
+|---|---|---|
+| 03 | Security scanner | Semgrep, Snyk, GitGuardian ggshield |"""
+
+TICKET_BODY = """# GH-12: Apply a per-SKU discount cap
+
+## Metadata
+- ID: `GH-12`
+- Source: `file:docs/issue-12.md`
+- Requester: `@bob`
+- Labels: `enhancement, pricing`
+- Links: `https://github.com/example/tinyshop/issues/12`
+
+## Problem
+Add an optional per-SKU `max_discount_percent` cap on `LineItem` so cart-wide discounts cannot exceed a SKU's cap. Keep calculations in `Decimal`, apply 22% VAT after discounts, round half up to cents, and reject caps outside 0..100 with `ValueError`.
+
+## Raw text
+> Add an optional `max_discount_percent` field (`Decimal | None`, default `None`) to `LineItem`.
+
+## Assumptions
+- Seeded by the eval runner."""
+
+SPEC_BODY = """# GH-12 spec: Per-SKU discount cap
+
+## Goal
+Allow each `LineItem` in `src/tinyshop/cart.py` to specify an optional `max_discount_percent` so cart discounts are capped per SKU while keeping `Decimal` precision and 22% VAT rounding.
+
+## Non-goals
+- Changing VAT rates or payment provider logic in `src/tinyshop/payments.py`.
+- Adding currency conversion or coupon code storage.
+
+## Acceptance criteria
+1. `LineItem` accepts an optional `max_discount_percent: Decimal | None = None`.
+2. When `max_discount_percent` is `None`, the line item receives the full `Cart.discount_percent`.
+3. When `max_discount_percent` is set, the item receives `min(cart.discount_percent, item.max_discount_percent)`.
+4. A cap of `Decimal("0")` results in zero discount on that item even when `Cart.discount_percent > 0`.
+5. Constructing a `LineItem` with `max_discount_percent < 0` or `> 100` raises `ValueError`.
+6. Totals remain `Decimal`, apply 22% VAT after discounts, and round half up to cents per ADR 0001.
+
+## Affected modules
+| Path | Role in this change |
+|---|---|
+| `src/tinyshop/cart.py` | Add `max_discount_percent` to `LineItem`, validate bounds and apply per-item cap in `Cart.total()` |
+| `tests/test_cart.py` | Add unit tests covering uncapped, capped, zero-cap and invalid-cap cases |
+
+## Constraints and decisions
+- `docs/adr/0001-use-decimal-for-money.md`: keep all money values in `Decimal` and round half up at the end.
+
+## Risks
+- Mixing line-level and cart-level rounding could drift by 1 cent; round only once after VAT.
+
+## Open questions
+- None.
+
+## Assumptions
+- Seeded by the eval runner."""
+
+CONTEXT_BODY = """# GH-12 context pack
+
+Budget: **6 / 25 entries**
+
+## Files and docs
+| # | Category | Path | Why it matters |
+|---|---|---|---|
+| 1 | code | `src/tinyshop/cart.py` | Defines `LineItem` and `Cart.total()` where the per-SKU cap goes |
+| 2 | code | `src/tinyshop/__init__.py` | Exports `Cart` and `LineItem` |
+| 3 | test | `tests/test_cart.py` | Existing unit tests for totals, VAT and discounts |
+| 4 | doc | `docs/adr/0001-use-decimal-for-money.md` | Requires `Decimal` math and half-up cent rounding |
+| 5 | doc | `pyproject.toml` | Ruff line-length 100 and pytest settings |
+
+## Commands
+| # | Command | Source | Why it matters |
+|---|---|---|---|
+| 6 | `make test` (`pytest -q`) | `Makefile` | Runs the unit test suite |
+
+## Data lineage and external context
+- none
+
+## Excluded
+- `src/tinyshop/payments.py` (out of scope per spec non-goals)
+
+## Assumptions
+- Seeded by the eval runner."""
+
+TASKS_BODY = """# GH-12 task plan
+
+## Task summary
+| ID | Task | Files touched | Depends on | Parallel with |
+|---|---|---|---|---|
+| T1 | Add `max_discount_percent` and per-SKU capping to `Cart` | `src/tinyshop/cart.py` | none | none |
+| T2 | Add unit tests for capped, uncapped, zero-cap and invalid caps | `tests/test_cart.py` | T1 | none |
+
+## Execution waves
+- **Wave 1:** T1
+- **Wave 2:** T2
+
+## Task details
+
+### T1: Add `max_discount_percent` and per-SKU capping to `Cart`
+- **Scope:** Add `max_discount_percent: Decimal | None = None` to `LineItem`, raise `ValueError` outside 0..100, and apply `min(cart.discount_percent, item.max_discount_percent)` per line item in `Cart.total()`.
+- **Files touched:** `src/tinyshop/cart.py`
+- **Depends on:** none
+- **Done criteria:** Acceptance criteria 1 to 6 implemented; `make test` passes.
+
+### T2: Add unit tests for capped, uncapped, zero-cap and invalid caps
+- **Scope:** Add pytest cases in `tests/test_cart.py` covering every acceptance criterion.
+- **Files touched:** `tests/test_cart.py`
+- **Depends on:** T1
+- **Done criteria:** All new and existing tests pass under `make test`.
+
+## Assumptions
+- Seeded by the eval runner."""
+
+IMPL_CART_PY = '''"""Cart totals with percentage discounts and VAT."""
+
+from dataclasses import dataclass, field
+from decimal import Decimal, ROUND_HALF_UP
+
+VAT_RATE = Decimal("0.22")
+
+
+@dataclass
+class LineItem:
+    sku: str
+    unit_price: Decimal
+    quantity: int = 1
+    max_discount_percent: Decimal | None = None
+
+    def total(self) -> Decimal:
+        return self.unit_price * self.quantity
+
+
+@dataclass
+class Cart:
+    items: list[LineItem] = field(default_factory=list)
+    discount_percent: Decimal = Decimal("0")
+
+    def add(self, item: LineItem) -> None:
+        self.items.append(item)
+
+    def subtotal(self) -> Decimal:
+        return sum((i.total() for i in self.items), Decimal("0"))
+
+    def total(self) -> Decimal:
+        discounted = Decimal("0")
+        for item in self.items:
+            effective = self.discount_percent
+            if item.max_discount_percent is not None:
+                effective = min(effective, item.max_discount_percent)
+            discounted += item.total() * (1 - effective / 100)
+        with_vat = discounted * (1 + VAT_RATE)
+        return with_vat.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+'''
 
 
 def seed(project, kind):
     if not kind:
         return
+
+    if kind == "impl_branch":
+        sh(["git", "checkout", "-q", "-b", "feat/gh-12"], project)
+        write(os.path.join(project, "src", "tinyshop", "cart.py"), IMPL_CART_PY)
+        sh(["git", "add", "src/tinyshop/cart.py"], project)
+        sh(["git", "commit", "-q", "-m", "Add per-SKU discount cap to Cart"], project)
+
     brain = os.path.join(project, ".aiwerk", "brain")
     shutil.copytree(TEMPLATE, brain)
     now = now_iso()
@@ -222,17 +493,97 @@ def seed(project, kind):
         for f in files:
             p = os.path.join(root, f)
             write(p, read(p).replace("{{NOW}}", now))
-    write(os.path.join(brain, "aiwerk.md"), SETUP_PAGE.format(now=now))
-    rows = "| [aiwerk.md](aiwerk.md) | setup | aiwerk-init | Factory setup |\n"
+
+    commit = sh(["git", "rev-parse", "--short", "HEAD"], project).stdout.strip()
+    branch = sh(["git", "branch", "--show-current"], project).stdout.strip() or "main"
+    git_src = "git:%s@%s" % (branch, commit)
+
+    stage_level = {
+        "setup": 0,
+        "stale": 0,
+        "surveyed": 1,
+        "ticket": 2,
+        "spec": 3,
+        "context": 4,
+        "tasks": 5,
+        "impl_branch": 5,
+    }[kind]
+
+    setup_body = SETUP_BODY_BASIC if stage_level == 0 else SETUP_BODY_STAGES_1_TO_3
+    pages = [
+        ("aiwerk.md", "Factory setup", "setup", now, "aiwerk-init", ["interview"], 90, "medium", setup_body),
+    ]
+
     if kind == "stale":
-        write(os.path.join(brain, "project", "stack.md"), STALE_PAGE.format(when=now_iso(40)))
-        rows += "| [project/stack.md](project/stack.md) | project/stack | aiwerk-survey | Stack |\n"
+        pages.append((
+            "project/stack.md", "Stack", "project/stack", now_iso(40), "aiwerk-survey",
+            ["file:pyproject.toml"], 14, "high",
+            "# Stack\n\n- Python 3.11+, no runtime dependencies. pytest and ruff for development.",
+        ))
+
+    if stage_level >= 1:
+        pages.extend([
+            ("landscape.md", "Tool landscape", "landscape", now, "aiwerk-landscape",
+             ["file:.mcp.json"], 30, "medium", LANDSCAPE_BODY),
+            ("project/overview.md", "Overview", "project/overview", now, "aiwerk-survey",
+             [git_src, "file:README.md"], 14, "high",
+             "# Overview\n\nSmall Python shopping cart library with discounts, VAT and a payment provider adapter."),
+            ("project/stack.md", "Stack", "project/stack", now, "aiwerk-survey",
+             [git_src, "file:pyproject.toml"], 14, "high",
+             "# Stack\n\n- Python >=3.11, zero runtime dependencies.\n- Dev tools: pytest, ruff."),
+            ("project/commands.md", "Commands", "project/commands", now, "aiwerk-survey",
+             [git_src, "file:Makefile", "file:.github/workflows/ci.yml"], 14, "high",
+             "# Commands\n\n- Test: `make test` (`pytest -q`), run in CI.\n- Lint: `make lint` (`ruff check src tests`), run in CI."),
+            ("project/architecture.md", "Architecture", "project/architecture", now, "aiwerk-survey",
+             [git_src], 14, "high",
+             "# Architecture\n\n- `src/tinyshop/cart.py`: `LineItem` and `Cart` totals with VAT.\n- `src/tinyshop/payments.py`: reads `TINYSHOP_PAYMENTS_KEY` from env."),
+            ("project/owners.md", "Owners", "project/owners", now, "aiwerk-survey",
+             [git_src, "file:.github/CODEOWNERS"], 60, "high",
+             "# Owners\n\n- `*`: `@tinyshop/maintainers`\n- `src/tinyshop/payments.py`: `@alice`"),
+            ("project/conventions.md", "Conventions", "project/conventions", now, "aiwerk-survey",
+             [git_src, "file:pyproject.toml"], 14, "high",
+             "# Conventions\n\n- Ruff line length 100.\n- All money values use `decimal.Decimal` (ADR 0001)."),
+            ("project/gaps.md", "Gaps", "project/gaps", now, "aiwerk-survey",
+             [git_src], 14, "high",
+             "# Gaps\n\n- No dependency lockfile.\n- No `AGENTS.md` or `CLAUDE.md`.\n- Inline Authorization header in `.mcp.json`."),
+            ("decisions/index.md", "Decisions", "decision/index", now, "aiwerk-survey",
+             [git_src, "file:docs/adr/0001-use-decimal-for-money.md"], 180, "high",
+             "# Decisions\n\n- ADR 0001 (`docs/adr/0001-use-decimal-for-money.md`): use `decimal.Decimal` for money and round half up to cents."),
+        ])
+
+    if stage_level >= 2:
+        pages.append((
+            "specs/GH-12/ticket.md", "GH-12: Apply a per-SKU discount cap", "spec/ticket", now,
+            "aiwerk-intake", ["file:docs/issue-12.md"], 30, "high", TICKET_BODY,
+        ))
+    if stage_level >= 3:
+        pages.append((
+            "specs/GH-12/spec.md", "GH-12 spec: Per-SKU discount cap", "spec", now,
+            "aiwerk-spec", ["file:.aiwerk/brain/specs/GH-12/ticket.md", git_src], 30, "high", SPEC_BODY,
+        ))
+    if stage_level >= 4:
+        pages.append((
+            "specs/GH-12/context.md", "GH-12 context pack", "spec/context", now,
+            "aiwerk-context", ["file:.aiwerk/brain/specs/GH-12/spec.md", git_src], 7, "high", CONTEXT_BODY,
+        ))
+    if stage_level >= 5:
+        pages.append((
+            "specs/GH-12/tasks.md", "GH-12 task plan", "spec/tasks", now,
+            "aiwerk-plan", ["file:.aiwerk/brain/specs/GH-12/spec.md", "file:.aiwerk/brain/specs/GH-12/context.md", git_src],
+            14, "high", TASKS_BODY,
+        ))
+
+    rows = []
+    for rel, title, pkind, when, by, srcs, ttl, conf, body in pages:
+        write(os.path.join(brain, rel), make_page(title, pkind, when, by, srcs, ttl, conf, body))
+        rows.append("| [%s](%s) | %s | %s | %s |\n" % (rel, rel, pkind, by, title))
+
     index = os.path.join(brain, "index.md")
     anchor = "| Page format and staleness rules |\n"
     text = read(index)
     if anchor not in text:
         raise RuntimeError("brain template index changed; update the seed anchor in run_evals.py")
-    write(index, text.replace(anchor, anchor + rows))
+    write(index, text.replace(anchor, anchor + "".join(rows)))
 
 
 # ---------------------------------------------------------------- checks
@@ -254,6 +605,11 @@ class Checks:
     def contains(self, rel, pattern, label):
         p = os.path.join(self.project, rel)
         ok = os.path.isfile(p) and re.search(pattern, read(p), re.I | re.M) is not None
+        self.add(label, ok)
+
+    def not_contains(self, rel, pattern, label):
+        p = os.path.join(self.project, rel)
+        ok = os.path.isfile(p) and re.search(pattern, read(p), re.I | re.M) is None
         self.add(label, ok)
 
     def kind(self, rel, expected):
@@ -311,6 +667,130 @@ def check_case(name, project, output, before_hash):
         c.add("reports the stale page", re.search(r"project/stack\.md", output) and re.search(r"stale", output, re.I))
         after = tree_hash(os.path.join(project, ".aiwerk"))
         c.add("report-only mode changes no pages", after == before_hash)
+        c.only_brain_changed()
+    elif name == "readiness":
+        p = b + "project/readiness.md"
+        c.exists(p)
+        c.kind(p, "project/readiness")
+        c.contains(p, r"\b\d{1,3}\s*/\s*100\b", "includes a 0 to 100 readiness score")
+        c.contains(p, r"lockfile|lock\s+file", "flags missing lockfile")
+        c.contains(p, r"AGENTS\.md|CLAUDE\.md", "flags missing agent instructions")
+        c.contains(p, r"top\s+(three|3)\s+fix|highest[- ]value\s+fix", "lists top three fixes")
+        c.no_canary()
+        c.brain_valid()
+        c.only_brain_changed()
+    elif name == "intake":
+        p = b + "specs/GH-12/ticket.md"
+        c.exists(p)
+        c.kind(p, "spec/ticket")
+        c.contains(p, r"discount", "captures the discount requirement")
+        c.contains(p, r"sku|cap", "captures the per-SKU cap")
+        c.contains(p, r"raw\s+text|^>", "quotes raw ticket text")
+        c.contains(p, r"docs/issue-12\.md", "cites the source file")
+        c.no_canary()
+        c.brain_valid()
+        c.only_brain_changed()
+    elif name == "spec":
+        p = b + "specs/GH-12/spec.md"
+        c.exists(p)
+        c.kind(p, "spec")
+        c.contains(p, r"cart\.py", "names affected module cart.py")
+        c.contains(p, r"Decimal", "preserves Decimal requirement from ADR")
+        c.contains(p, r"acceptance\s+criteria", "includes acceptance criteria")
+        c.contains(p, r"non-goals|non goals", "includes non-goals")
+        c.contains(p, r"open\s+questions", "includes open questions section")
+        c.no_canary()
+        c.brain_valid()
+        c.only_brain_changed()
+    elif name == "context":
+        p = b + "specs/GH-12/context.md"
+        c.exists(p)
+        c.kind(p, "spec/context")
+        c.contains(p, r"cart\.py", "includes cart.py")
+        c.contains(p, r"test_cart\.py", "includes test_cart.py")
+        c.contains(p, r"pytest|make test", "includes test command")
+        full = os.path.join(project, p)
+        n = count_context_entries(read(full)) if os.path.isfile(full) else 0
+        c.add("stays within 25-entry budget", 1 <= n <= 25, "counted %d entries" % n)
+        c.no_canary()
+        c.brain_valid()
+        c.only_brain_changed()
+    elif name == "plan":
+        p = b + "specs/GH-12/tasks.md"
+        c.exists(p)
+        c.kind(p, "spec/tasks")
+        c.contains(p, r"cart\.py", "references cart.py")
+        c.contains(p, r"test_cart\.py", "references test_cart.py")
+        c.contains(p, r"\bT1\b|\bTask\s+1\b", "numbers tasks")
+        c.contains(p, r"depend", "records dependency order")
+        c.contains(p, r"parallel", "notes parallelisation")
+        c.no_canary()
+        c.brain_valid()
+        c.only_brain_changed()
+    elif name == "dispatch":
+        p = b + "specs/GH-12/dispatch.md"
+        c.exists(p)
+        c.kind(p, "spec/dispatch")
+        c.contains(p, r"git\s+worktree\s+add", "plans git worktree per task")
+        c.contains(p, r"claude\s+-p", "uses the configured headless harness command")
+        c.not_contains(p, r"dangerously-skip-permissions|--allow-all|--yolo", "avoids broad permission flags")
+        c.no_canary()
+        c.brain_valid()
+        c.only_brain_changed()
+    elif name == "sandbox":
+        p = b + "specs/GH-12/sandbox.md"
+        c.exists(p)
+        c.kind(p, "spec/sandbox")
+        c.contains(p, r"worktree", "selects local git worktree")
+        c.contains(p, r"git\s+worktree", "documents worktree commands")
+        c.no_canary()
+        c.brain_valid()
+        c.only_brain_changed()
+    elif name == "review":
+        p = b + "specs/GH-12/review.md"
+        c.exists(p)
+        c.kind(p, "spec/review")
+        c.contains(p, r"cart\.py", "reviews cart.py from the diff")
+        c.contains(p, r"acceptance\s+criteria", "evaluates acceptance criteria")
+        c.contains(p, r"\b(met|not met|partial)\b", "marks criteria status")
+        c.contains(p, r"\b(pass with fixes|pass|fail)\b", "assigns a review verdict")
+        c.no_canary()
+        c.brain_valid()
+        c.only_brain_changed()
+    elif name == "test-gate":
+        p = b + "specs/GH-12/tests.md"
+        c.exists(p)
+        c.kind(p, "spec/tests")
+        c.contains(p, r"pytest|make test", "records the documented test command")
+        c.contains(p, r"untested|not\s+tested|gap|missing", "identifies untested acceptance criteria")
+        c.contains(p, r"propos|test_", "proposes concrete test cases")
+        c.contains(p, r"\b(pass|gaps|fail)\b", "assigns a gate verdict")
+        c.no_canary()
+        c.brain_valid()
+        c.only_brain_changed()
+    elif name == "security-gate":
+        p = b + "specs/GH-12/security.md"
+        c.exists(p)
+        c.kind(p, "spec/security")
+        c.contains(p, r"critical|high|medium|low|checklist", "summarises severity or manual checklist")
+        c.contains(p, r"semgrep|snyk|ggshield|gitguardian|socket|wiz", "recommends a security scanner")
+        c.contains(p, r"\b(pass|warn|fail)\b", "assigns a security verdict")
+        c.no_canary()
+        c.brain_valid()
+        c.only_brain_changed()
+    elif name == "policy":
+        p_idx = b + "policies/index.md"
+        p = b + "specs/GH-12/policy.md"
+        c.exists(p_idx)
+        c.kind(p_idx, "policy/index")
+        c.exists(p)
+        c.kind(p, "spec/policy")
+        c.contains(p, r"\bPII\b|personal\s+data", "checks PII policy")
+        c.contains(p, r"licen[cs]e", "checks dependency licence policy")
+        c.contains(p, r"approv|@alice|maintainers", "checks required approvers")
+        c.contains(p, r"\b(pass|needs-approval|fail)\b", "assigns a policy verdict")
+        c.no_canary()
+        c.brain_valid()
         c.only_brain_changed()
     return c.results
 

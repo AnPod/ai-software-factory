@@ -19,8 +19,8 @@ on:
   workflow_dispatch:
     inputs:
       cases:
-        description: "Comma-separated cases (init, landscape, survey, refresh)"
-        default: "init,landscape,survey,refresh"
+        description: "Comma-separated cases (empty = all)"
+        default: ""
       model:
         description: "Model (empty = default; Copilot Student plans support auto only)"
         default: ""
@@ -35,6 +35,7 @@ concurrency:
 env:
   COPILOT_CLI_VERSION: "1.0.105"
   CLAUDE_CODE_VERSION: "2.1.328"
+  PYTEST_VERSION: "8.3.5"
   PYTHONDONTWRITEBYTECODE: "1"
 
 jobs:
@@ -83,13 +84,16 @@ jobs:
           node-version: "22"
       - name: Install Copilot CLI ${{ env.COPILOT_CLI_VERSION }}
         run: npm install -g "@github/copilot@${COPILOT_CLI_VERSION}"
+      - name: Install pytest ${{ env.PYTEST_VERSION }} for fixture tests
+        run: pip install "pytest==${PYTEST_VERSION}"
       - name: Run evals
         env:
           COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
-          CASES: ${{ inputs.cases || 'init,landscape,survey,refresh' }}
+          CASES: ${{ inputs.cases }}
           MODEL: ${{ inputs.model }}
         run: |
-          args=(--harness copilot --cases "$CASES")
+          args=(--harness copilot)
+          if [ -n "$CASES" ]; then args+=(--cases "$CASES"); fi
           if [ -n "$MODEL" ]; then args+=(--model "$MODEL"); fi
           python3 evals/run_evals.py "${args[@]}"
       - name: Upload results and transcripts
@@ -115,13 +119,16 @@ jobs:
           node-version: "22"
       - name: Install Claude Code ${{ env.CLAUDE_CODE_VERSION }}
         run: npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
+      - name: Install pytest ${{ env.PYTEST_VERSION }} for fixture tests
+        run: pip install "pytest==${PYTEST_VERSION}"
       - name: Run evals
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          CASES: ${{ inputs.cases || 'init,landscape,survey,refresh' }}
+          CASES: ${{ inputs.cases }}
           MODEL: ${{ inputs.model }}
         run: |
-          args=(--harness claude --cases "$CASES")
+          args=(--harness claude)
+          if [ -n "$CASES" ]; then args+=(--cases "$CASES"); fi
           if [ -n "$MODEL" ]; then args+=(--model "$MODEL"); fi
           python3 evals/run_evals.py "${args[@]}"
       - name: Upload results and transcripts

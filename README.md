@@ -72,17 +72,17 @@ The stages follow a five-station delivery line. Stage skills are released in ord
 | `aiwerk-landscape` | Setup | Maps MCP servers, CLIs and plugins to stages, asks consent per source | available |
 | `aiwerk-survey` | 01 Intake and context | First full read of the project into the brain | available |
 | `aiwerk-refresh` | Setup | Finds stale or broken knowledge and renews it with your approval | available |
-| `aiwerk-readiness` | 01 Intake and context | Scores how ready the repository is for agents | planned |
-| `aiwerk-intake` | 01 Intake and context | Turns a Jira, Linear, Slack or GitHub item into a ticket | planned |
-| `aiwerk-spec` | 01 Intake and context | Writes a spec with acceptance criteria grounded in the brain | planned |
-| `aiwerk-context` | 01 Intake and context | Assembles the minimal context one task needs | planned |
-| `aiwerk-plan` | 02 Orchestration | Splits a spec into independent tasks | planned |
-| `aiwerk-dispatch` | 02 Orchestration | Runs tasks headless in the chosen harness | planned |
-| `aiwerk-sandbox` | 02 Orchestration | Runs a task in a worktree, container or sandbox service | planned |
-| `aiwerk-review` | 03 Eval and governance | Adversarial review of a diff against its spec | planned |
-| `aiwerk-test-gate` | 03 Eval and governance | Runs and extends tests, blocks regressions | planned |
-| `aiwerk-security-gate` | 03 Eval and governance | Runs the scanners you have (Snyk, Semgrep, GitGuardian, Socket, Wiz) | planned |
-| `aiwerk-policy` | 03 Eval and governance | Checks PII, licence and data rules from the brain | planned |
+| `aiwerk-readiness` | 01 Intake and context | Scores how ready the repository is for agents | available |
+| `aiwerk-intake` | 01 Intake and context | Turns a Jira, Linear, Slack or GitHub item into a ticket | available |
+| `aiwerk-spec` | 01 Intake and context | Writes a spec with acceptance criteria grounded in the brain | available |
+| `aiwerk-context` | 01 Intake and context | Assembles the minimal context one task needs | available |
+| `aiwerk-plan` | 02 Orchestration | Splits a spec into independent tasks | available |
+| `aiwerk-dispatch` | 02 Orchestration | Runs tasks headless in the chosen harness | available |
+| `aiwerk-sandbox` | 02 Orchestration | Runs a task in a worktree, container or sandbox service | available |
+| `aiwerk-review` | 03 Eval and governance | Adversarial review of a diff against its spec | available |
+| `aiwerk-test-gate` | 03 Eval and governance | Runs and extends tests, blocks regressions | available |
+| `aiwerk-security-gate` | 03 Eval and governance | Runs the scanners you have (Snyk, Semgrep, GitGuardian, Socket, Wiz) | available |
+| `aiwerk-policy` | 03 Eval and governance | Checks PII, licence and data rules from the brain | available |
 | `aiwerk-release` | 04 Release | Release notes, version, PR description | planned |
 | `aiwerk-deploy-check` | 04 Release | Pre-deploy checklist with rollback trigger | planned |
 | `aiwerk-docs-sync` | 04 Release | Updates docs and brain after a merge | planned |

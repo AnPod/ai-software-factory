@@ -29,12 +29,15 @@ Source prefixes: `git:<branch>@<commit>`, `file:<path>`, `mcp:<server>/<resource
 |---|---|---|
 | `setup` (aiwerk.md) | 90 | Team choices change slowly |
 | `landscape` | 30 | Tools and MCP servers change monthly |
-| `project/*` overview, stack, architecture | 14 | Code moves fast |
+| `project/*` overview, stack, architecture, readiness | 14 | Code moves fast |
 | `project/commands` | 14 | Build and test commands drift |
 | `project/owners` | 60 | Teams change slowly |
 | `policy/*` | 90 | Reviewed quarterly |
 | `decision/*` | 180 | Decisions are durable until superseded |
-| `spec/*` | 30 | Specs go stale when not picked up |
+| `spec`, `spec/ticket` | 30 | Specs go stale when not picked up |
+| `spec/tasks` | 14 | Task plans drift as code changes |
+| `spec/context`, `spec/dispatch`, `spec/sandbox` | 7 | Context and execution plans decay quickly |
+| `spec/review`, `spec/tests`, `spec/security`, `spec/policy` | 7 | Gate verdicts belong to the current diff |
 | `incident/*` | 7 | Operational context decays fast |
 | `health` | 1 | Regenerated on every run |
 | `index` | 1 | Rewritten whenever a page changes |
