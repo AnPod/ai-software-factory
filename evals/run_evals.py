@@ -6,13 +6,16 @@ optionally seeds a brain, runs the agent headless with one prompt, then checks t
 agent wrote with deterministic assertions. No model grades another model.
 
 Usage:
-  python3 evals/run_evals.py                      # all cases with Claude Code
-  python3 evals/run_evals.py --cases init,survey  # some cases
+  python3 evals/run_evals.py                          # all cases with Claude Code
+  python3 evals/run_evals.py --harness copilot        # all cases with GitHub Copilot CLI
+  python3 evals/run_evals.py --cases init,survey      # some cases
   python3 evals/run_evals.py --agent-cmd "python3 tests/fake_agent.py"   # self-test, no API
 
-Needs the agent CLI installed and its API key in the environment (for Claude Code:
-ANTHROPIC_API_KEY). Writes evals/results/results.json and transcripts, and appends a Markdown
-table to $GITHUB_STEP_SUMMARY when set.
+Needs the agent CLI installed and signed in through the environment:
+  claude   ANTHROPIC_API_KEY
+  copilot  COPILOT_GITHUB_TOKEN (fine-grained personal access token with "Copilot Requests")
+Writes evals/results/results.json and transcripts, and appends a Markdown table to
+$GITHUB_STEP_SUMMARY when set.
 """
 
 import argparse
@@ -40,6 +43,18 @@ CLAUDE_TOOLS = [
     "Bash(git:*)", "Bash(ls:*)", "Bash(python3:*)", "Bash(command -v:*)", "Bash(mkdir:*)",
     "Bash(cp:*)", "Bash(date:*)", "Bash(cat:*)", "Bash(find:*)", "Bash(wc:*)", "Bash(head:*)",
 ]
+
+# Copilot CLI denies every tool that no rule allows when it runs non-interactively.
+# Reading files inside the project is allowed by default.
+COPILOT_TOOLS = [
+    "write", "shell(git:*)", "shell(ls:*)", "shell(python3:*)", "shell(command:*)", "shell(mkdir:*)",
+    "shell(cp:*)", "shell(date:*)", "shell(cat:*)", "shell(find:*)", "shell(wc:*)", "shell(head:*)",
+]
+COPILOT_DENY = ["shell(git push)", "shell(git remote)", "shell(curl)", "shell(wget)"]
+TOKEN_VARS = "COPILOT_GITHUB_TOKEN,GH_TOKEN,GITHUB_TOKEN,ANTHROPIC_API_KEY"
+
+# Where each harness looks for skills (install.sh --harness value).
+SKILL_FOLDERS = {"claude": "claude", "copilot": "agents", "custom": "claude,agents"}
 
 NON_INTERACTIVE = (
     " Non-interactive mode: do not ask me any questions, use detected values and defaults, "
@@ -115,7 +130,7 @@ def brain_files(project):
 
 # ---------------------------------------------------------------- setup
 
-def make_project(workdir):
+def make_project(workdir, harness):
     project = os.path.join(workdir, "tinyshop")
     shutil.copytree(FIXTURE, project)
     sh(["git", "init", "-q", "-b", "main"], project)
@@ -126,7 +141,7 @@ def make_project(workdir):
     # Installed skills are not part of the project under test.
     with open(os.path.join(project, ".git", "info", "exclude"), "a", encoding="utf-8") as fh:
         fh.write("\n.claude/\n.agents/\n")
-    r = sh([os.path.join(ROOT, "install.sh"), "--project", project, "--harness", "claude,agents", "--apply"], ROOT)
+    r = sh([os.path.join(ROOT, "install.sh"), "--project", project, "--harness", SKILL_FOLDERS[harness], "--apply"], ROOT)
     if r.returncode != 0:
         raise RuntimeError("install.sh failed: " + r.stderr)
     return project
@@ -302,26 +317,36 @@ def check_case(name, project, output, before_hash):
 
 # ---------------------------------------------------------------- agent
 
-def agent_command(args):
+def agent_command(args, prompt):
+    """Return (argv, stdin) for one headless agent run."""
     if args.agent_cmd:
-        return shlex.split(args.agent_cmd)
+        return shlex.split(args.agent_cmd), prompt
+    if args.harness == "copilot":
+        cmd = ["copilot", "--no-auto-update", "-p", prompt, "--silent", "--no-ask-user", "--no-color",
+               "--disable-builtin-mcps", "--model", args.model or "auto", "--secret-env-vars=" + TOKEN_VARS]
+        cmd += ["--allow-tool=" + t for t in COPILOT_TOOLS]
+        cmd += ["--deny-tool=" + t for t in COPILOT_DENY]
+        if args.max_credits:
+            cmd += ["--max-ai-credits", str(args.max_credits)]
+        return cmd, None
     cmd = ["claude", "-p", "--output-format", "text", "--permission-mode", "acceptEdits",
            "--allowedTools"] + CLAUDE_TOOLS
     if args.model:
         cmd[1:1] = ["--model", args.model]
-    return cmd
+    return cmd, prompt
 
 
 def run_case(name, args, workdir):
     case = CASES[name]
-    project = make_project(workdir)
+    project = make_project(workdir, "custom" if args.agent_cmd else args.harness)
     seed(project, case["seed"])
     before = tree_hash(os.path.join(project, ".aiwerk")) if case["seed"] else None
     env = dict(os.environ, AIWERK_EVAL_CASE=name)
     start = time.time()
     try:
-        r = subprocess.run(agent_command(args), cwd=project, input=case["prompt"], capture_output=True,
-                           text=True, timeout=args.timeout, env=env)
+        argv, stdin = agent_command(args, case["prompt"])
+        r = subprocess.run(argv, cwd=project, input=stdin, capture_output=True, text=True,
+                           timeout=args.timeout, env=env, stdin=None if stdin is not None else subprocess.DEVNULL)
         output, code = r.stdout + "\n" + r.stderr, r.returncode
     except subprocess.TimeoutExpired as e:
         output, code = (e.stdout or "") if isinstance(e.stdout, str) else "", "timeout"
@@ -348,7 +373,9 @@ def summary_markdown(results, harness):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--cases", default=",".join(CASES), help="comma-separated: " + ", ".join(CASES))
-    ap.add_argument("--model", help="model for the agent CLI")
+    ap.add_argument("--harness", choices=["claude", "copilot"], default="claude", help="agent CLI to test")
+    ap.add_argument("--model", help="model for the agent CLI (copilot default: auto)")
+    ap.add_argument("--max-credits", type=int, help="copilot only: cap GitHub AI credits per case")
     ap.add_argument("--agent-cmd", help="custom agent command that reads the prompt on stdin (for self-tests)")
     ap.add_argument("--timeout", type=int, default=900, help="seconds per case")
     ap.add_argument("--keep", action="store_true", help="keep the temporary projects")
@@ -358,9 +385,9 @@ def main():
     unknown = [n for n in names if n not in CASES]
     if unknown:
         ap.error("unknown cases: " + ", ".join(unknown))
-    harness = "custom" if args.agent_cmd else "claude-code"
-    if not args.agent_cmd and not shutil.which("claude"):
-        print("claude CLI not found; install it or pass --agent-cmd", file=sys.stderr)
+    harness = "custom" if args.agent_cmd else {"claude": "claude-code", "copilot": "copilot-cli"}[args.harness]
+    if not args.agent_cmd and not shutil.which(args.harness):
+        print("%s CLI not found; install it or pass --agent-cmd" % args.harness, file=sys.stderr)
         return 2
 
     shutil.rmtree(RESULTS, ignore_errors=True)

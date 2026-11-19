@@ -53,8 +53,8 @@ check "uninstall keeps other skills" '[ -d "$TMP/p3/.opencode/skills/someone-els
 
 # 6. Aliases and the droid path.
 mkdir "$TMP/p4"
-"$INSTALL" --project "$TMP/p4" --harness codex,pi,droid --apply >/dev/null
-check "codex and pi map to .agents" '[ -L "$TMP/p4/.agents/skills/$first" ]'
+"$INSTALL" --project "$TMP/p4" --harness codex,pi,copilot,droid --apply >/dev/null
+check "codex, pi and copilot map to .agents" '[ -L "$TMP/p4/.agents/skills/$first" ]'
 check "droid maps to .factory/skills" '[ -L "$TMP/p4/.factory/skills/$first" ]'
 
 # 7. User scope respects HOME.

@@ -10,7 +10,7 @@
 #                [--copy] [--apply] [--uninstall]
 #
 #   --harness   comma-separated: claude, agents, opencode, cursor, gemini, droid, all
-#               (codex and pi are aliases for agents). Default: claude,agents
+#               (codex, pi and copilot are aliases for agents). Default: claude,agents
 #   --scope     project (default): into DIR/.claude/skills etc.
 #               user: into your home folder, for every project
 #   --project   project folder for --scope project. Default: current folder
@@ -80,7 +80,7 @@ IFS=',' read -r -a requested <<< "$harness"
 for h in "${requested[@]}"; do
   case "$h" in
     all) set -- claude agents opencode cursor gemini droid ;;
-    codex|pi) set -- agents ;;
+    codex|pi|copilot) set -- agents ;;
     claude|agents|opencode|cursor|gemini|droid) set -- "$h" ;;
     "") set -- ;;
     *) die "unknown harness: $h" ;;

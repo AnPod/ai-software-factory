@@ -8,7 +8,7 @@
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Agent Skills standard](https://img.shields.io/badge/format-Agent%20Skills-black.svg)](https://agentskills.io)
 
-AI Werk Skills is a set of plain-Markdown [Agent Skills](https://agentskills.io) that turn Claude Code, Codex, OpenCode, Pi, Cursor, Gemini CLI or Factory Droid into a repeatable software delivery line. The skills interview your team, map which tools your agents can reach, ask before they touch anything, and keep a timestamped project memory (the *brain*) that every later step reads first.
+AI Werk Skills is a set of plain-Markdown [Agent Skills](https://agentskills.io) that turn Claude Code, GitHub Copilot CLI, Codex, OpenCode, Pi, Cursor, Gemini CLI or Factory Droid into a repeatable software delivery line. The skills interview your team, map which tools your agents can reach, ask before they touch anything, and keep a timestamped project memory (the *brain*) that every later step reads first.
 
 No server, no database, no account. Clone it, link the skills, ask your agent to run `aiwerk-init`.
 
@@ -25,7 +25,7 @@ Then, in your coding agent:
 
 > Use the aiwerk-init skill to set up the software factory for this project.
 
-Other harnesses: `--harness opencode,cursor,gemini,droid` or `--harness all`. Install for every project with `--scope user`. Remove with `--uninstall --apply`.
+Other harnesses: `--harness copilot,opencode,cursor,gemini,droid` or `--harness all`. Install for every project with `--scope user`. Remove with `--uninstall --apply`.
 
 ## How it works
 
@@ -97,6 +97,7 @@ The stages follow a five-station delivery line. Stage skills are released in ord
 | Harness | Skill folder | Headless run |
 |---|---|---|
 | Claude Code | `.claude/skills` | `claude -p` |
+| GitHub Copilot CLI | `.agents/skills` (also reads `.github/skills` and `.claude/skills`) | `copilot -p` |
 | OpenAI Codex | `.agents/skills` | `codex exec` |
 | OpenCode | `.opencode/skills` (also reads `.claude` and `.agents`) | `opencode run` |
 | Pi | `.agents/skills` | `pi -p` |
@@ -104,7 +105,7 @@ The stages follow a five-station delivery line. Stage skills are released in ord
 | Gemini CLI | `.gemini/skills` | `gemini -p` |
 | Factory Droid | `.factory/skills` | `droid exec` |
 
-Claude Code is tested end to end in CI. The others read the same `SKILL.md` format; reports from users are welcome.
+Claude Code and GitHub Copilot CLI are tested end to end in CI. The others read the same `SKILL.md` format; reports from users are welcome.
 
 ## Safety
 
@@ -126,7 +127,7 @@ Three layers, all in GitHub Actions:
 |---|---|---|
 | **CI** | Skill format (name, description, links, risky shell patterns), brain template, unit tests for the checker and the eval runner, installer end to end on Linux and macOS, ShellCheck | every push and PR |
 | **SkillSpector scan** | Static security scan of all skills, SARIF and JSON reports | every push and PR, weekly, every release |
-| **Agent evals** | Runs Claude Code with the skills on a sample project and checks what it wrote: required pages, valid frontmatter, nothing written outside `.aiwerk/`, no secrets copied from MCP config, report-only mode changes nothing | weekly, on demand, and on PRs that change skills |
+| **Agent evals** | Runs GitHub Copilot CLI and Claude Code with the skills on a sample project and checks what they wrote: required pages, valid frontmatter, nothing written outside `.aiwerk/`, no secrets copied from MCP config, report-only mode changes nothing | weekly, on demand, and on PRs that change skills |
 
 Run locally:
 
@@ -134,7 +135,8 @@ Run locally:
 python3 scripts/validate_skills.py
 python3 -m unittest discover -s tests -v
 bash tests/test_install.sh
-ANTHROPIC_API_KEY=... python3 evals/run_evals.py     # needs the claude CLI
+COPILOT_GITHUB_TOKEN=... python3 evals/run_evals.py --harness copilot   # needs the copilot CLI
+ANTHROPIC_API_KEY=... python3 evals/run_evals.py --harness claude       # needs the claude CLI
 ```
 
 ## Contributing

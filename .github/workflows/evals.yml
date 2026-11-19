@@ -1,8 +1,12 @@
 name: Agent evals
 
-# Runs Claude Code with the skills on evals/fixtures/tinyshop and checks what it wrote.
-# Needs the repository secret ANTHROPIC_API_KEY. Costs API usage, so it runs weekly,
-# on demand, and when skills or evals change.
+# Runs real coding agents with the skills on evals/fixtures/tinyshop and checks what they wrote.
+# Each agent runs only when its secret is set:
+#   GitHub Copilot CLI  COPILOT_GITHUB_TOKEN  fine-grained personal access token with the
+#                                             "Copilot Requests" permission (works with Copilot
+#                                             Free, Student, Pro and Business plans)
+#   Claude Code         ANTHROPIC_API_KEY
+# Agent runs cost credits, so this workflow runs weekly, on demand, and when skills or evals change.
 
 on:
   push:
@@ -18,7 +22,7 @@ on:
         description: "Comma-separated cases (init, landscape, survey, refresh)"
         default: "init,landscape,survey,refresh"
       model:
-        description: "Model for Claude Code (empty = CLI default)"
+        description: "Model (empty = default; Copilot Student plans support auto only)"
         default: ""
 
 permissions:
@@ -29,52 +33,100 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  COPILOT_CLI_VERSION: "1.0.105"
   CLAUDE_CODE_VERSION: "2.1.328"
   PYTHONDONTWRITEBYTECODE: "1"
 
 jobs:
-  claude-code:
+  secrets:
+    name: Which agents can run
+    runs-on: ubuntu-latest
+    outputs:
+      copilot: ${{ steps.check.outputs.copilot }}
+      claude: ${{ steps.check.outputs.claude }}
+    steps:
+      - id: check
+        env:
+          HAS_COPILOT: ${{ secrets.COPILOT_GITHUB_TOKEN != '' }}
+          HAS_CLAUDE: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          echo "copilot=$HAS_COPILOT" >> "$GITHUB_OUTPUT"
+          echo "claude=$HAS_CLAUDE" >> "$GITHUB_OUTPUT"
+          {
+            echo "## Agent evals"
+            echo "- GitHub Copilot CLI: $([ "$HAS_COPILOT" = true ] && echo runs || echo 'skipped, no COPILOT_GITHUB_TOKEN secret')"
+            echo "- Claude Code: $([ "$HAS_CLAUDE" = true ] && echo runs || echo 'skipped, no ANTHROPIC_API_KEY secret')"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$HAS_COPILOT" != true ] && [ "$HAS_CLAUDE" != true ]; then
+            msg="No agent secret is set, so no evals ran."
+            # Pull requests from forks never get secrets: skip quietly. Everywhere else, fail
+            # so the badge never shows green for evals that did not run.
+            if [ "$EVENT" = "pull_request" ]; then echo "::notice::$msg"; exit 0; fi
+            echo "::error::$msg Add COPILOT_GITHUB_TOKEN or ANTHROPIC_API_KEY under Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+
+  copilot:
+    name: GitHub Copilot CLI
+    needs: secrets
+    if: needs.secrets.outputs.copilot == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    env:
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
     steps:
       - uses: actions/checkout@v4
-      - name: Check for API key
-        id: key
-        run: |
-          if [ -n "$ANTHROPIC_API_KEY" ]; then echo "present=true" >> "$GITHUB_OUTPUT"; exit 0; fi
-          echo "present=false" >> "$GITHUB_OUTPUT"
-          msg="ANTHROPIC_API_KEY secret is not set, evals did not run."
-          echo "## Agent evals skipped" >> "$GITHUB_STEP_SUMMARY"
-          echo "$msg" >> "$GITHUB_STEP_SUMMARY"
-          # Pull requests from forks never get secrets: skip quietly. Everywhere else, fail loudly
-          # so the badge never shows green for evals that did not run.
-          if [ "${{ github.event_name }}" = "pull_request" ]; then echo "::notice::$msg"; exit 0; fi
-          echo "::error::$msg Add it under Settings > Secrets and variables > Actions."; exit 1
       - uses: actions/setup-python@v5
-        if: steps.key.outputs.present == 'true'
         with:
           python-version: "3.12"
       - uses: actions/setup-node@v4
-        if: steps.key.outputs.present == 'true'
         with:
           node-version: "22"
-      - name: Install Claude Code ${{ env.CLAUDE_CODE_VERSION }}
-        if: steps.key.outputs.present == 'true'
-        run: npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
+      - name: Install Copilot CLI ${{ env.COPILOT_CLI_VERSION }}
+        run: npm install -g "@github/copilot@${COPILOT_CLI_VERSION}"
       - name: Run evals
-        if: steps.key.outputs.present == 'true'
         env:
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
           CASES: ${{ inputs.cases || 'init,landscape,survey,refresh' }}
           MODEL: ${{ inputs.model }}
         run: |
-          args=(--cases "$CASES")
+          args=(--harness copilot --cases "$CASES")
           if [ -n "$MODEL" ]; then args+=(--model "$MODEL"); fi
           python3 evals/run_evals.py "${args[@]}"
       - name: Upload results and transcripts
-        if: always() && steps.key.outputs.present == 'true'
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: eval-results
+          name: eval-results-copilot
+          path: evals/results/
+
+  claude-code:
+    name: Claude Code
+    needs: secrets
+    if: needs.secrets.outputs.claude == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install Claude Code ${{ env.CLAUDE_CODE_VERSION }}
+        run: npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
+      - name: Run evals
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CASES: ${{ inputs.cases || 'init,landscape,survey,refresh' }}
+          MODEL: ${{ inputs.model }}
+        run: |
+          args=(--harness claude --cases "$CASES")
+          if [ -n "$MODEL" ]; then args+=(--model "$MODEL"); fi
+          python3 evals/run_evals.py "${args[@]}"
+      - name: Upload results and transcripts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results-claude-code
           path: evals/results/
