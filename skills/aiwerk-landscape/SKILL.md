@@ -88,8 +88,21 @@ confidence: medium
 
 Consent values: `read`, `write`, `ask`, `denied`, `not-asked`. Keep earlier decisions unless the user changed them.
 
-## Step 7: Update index and log, then hand over
+## Step 7: Update index and log
 
-- Add or update the `landscape.md` row in `.aiwerk/brain/index.md`.
+- Add or update the `landscape.md` row in `.aiwerk/brain/index.md`. In its frontmatter, change only `gathered_at`.
 - Append to `.aiwerk/brain/log.md`: `<now> | aiwerk-landscape | <created|updated> landscape.md | <n> sources, <n> allowed`.
+
+## Step 8: Check your work
+
+If `python3` is available, run the brain checker that ships with the `aiwerk-refresh` skill, from the project root. `<skills folder>` is the folder that contains this skill's folder:
+
+```bash
+python3 <skills folder>/aiwerk-refresh/scripts/brain_status.py .aiwerk/brain --strict
+```
+
+Fix every problem it reports, for example a missing frontmatter field or a page missing from `index.md`, and run it again until it reports 0 problems. If Python or `aiwerk-refresh` is not available, check by hand that every page you wrote or changed, `index.md` included, has all seven frontmatter fields from `SCHEMA.md` and a row in `index.md`.
+
+## Step 9: Hand over
+
 - Summarise in a few lines: what is connected, what is allowed, the biggest gap. Suggest `aiwerk-survey` next if the project has not been surveyed.

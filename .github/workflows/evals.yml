@@ -74,11 +74,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: "22"
       - name: Install Copilot CLI ${{ env.COPILOT_CLI_VERSION }}
@@ -94,7 +94,7 @@ jobs:
           python3 evals/run_evals.py "${args[@]}"
       - name: Upload results and transcripts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: eval-results-copilot
           path: evals/results/
@@ -106,11 +106,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: "22"
       - name: Install Claude Code ${{ env.CLAUDE_CODE_VERSION }}
@@ -126,7 +126,7 @@ jobs:
           python3 evals/run_evals.py "${args[@]}"
       - name: Upload results and transcripts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: eval-results-claude-code
           path: evals/results/

@@ -119,10 +119,20 @@ Set `confidence: high` for answers the user gave, `medium` if most values were d
 
 ## Step 6: Update index and log
 
-- Add `aiwerk.md` to the table in `.aiwerk/brain/index.md` and update the `gathered_at` of `index.md`.
+- Add `aiwerk.md` to the table in `.aiwerk/brain/index.md`. In the frontmatter of `index.md`, change only `gathered_at` and keep the other six fields exactly as they are.
 - Append one line to `.aiwerk/brain/log.md`: `<now> | aiwerk-init | <created|updated> aiwerk.md | <harness>`.
 
-## Step 7: Hand over
+## Step 7: Check your work
+
+If `python3` is available, run the brain checker that ships with the `aiwerk-refresh` skill, from the project root. `<skills folder>` is the folder that contains this skill's folder:
+
+```bash
+python3 <skills folder>/aiwerk-refresh/scripts/brain_status.py .aiwerk/brain --strict
+```
+
+Fix every problem it reports, for example a missing frontmatter field or a page missing from `index.md`, and run it again until it reports 0 problems. If Python or `aiwerk-refresh` is not available, check by hand that every page you wrote or changed, `index.md` included, has all seven frontmatter fields from `SCHEMA.md` and a row in `index.md`.
+
+## Step 8: Hand over
 
 Tell the user in a few lines what was set up, then suggest the next step:
 

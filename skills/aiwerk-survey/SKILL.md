@@ -51,15 +51,25 @@ Write these pages in `.aiwerk/brain/project/`, each with the frontmatter from `S
 | `conventions.md` | `project/conventions` | Style, commits, branches, review rules |
 | `gaps.md` | `project/gaps` | Findings that make agent work harder or riskier |
 
-If ADRs exist, also write `.aiwerk/brain/decisions/index.md` (kind `decision/index`) listing them with links.
+If ADRs exist, also write `.aiwerk/brain/decisions/index.md` (kind `decision/index`, same frontmatter as every other page) listing them with links, and list it in `.aiwerk/brain/index.md`.
 
 Set `confidence` honestly: `high` when read directly from files, `medium` when inferred, `low` when guessed. Every statement that matters gets a source.
 
 ## Step 5: Update index and log
 
-- Add or update one row per page in `.aiwerk/brain/index.md`, then update its `gathered_at`.
+- Add or update one row per page in `.aiwerk/brain/index.md`. In its frontmatter, change only `gathered_at`.
 - Append one line per page to `.aiwerk/brain/log.md`: `<now> | aiwerk-survey | <created|updated|verified> <page> | git:<branch>@<commit>`.
 
-## Step 6: Report
+## Step 6: Check your work
+
+If `python3` is available, run the brain checker that ships with the `aiwerk-refresh` skill, from the project root. `<skills folder>` is the folder that contains this skill's folder:
+
+```bash
+python3 <skills folder>/aiwerk-refresh/scripts/brain_status.py .aiwerk/brain --strict
+```
+
+Fix every problem it reports, for example a missing frontmatter field or a page missing from `index.md`, and run it again until it reports 0 problems. If Python or `aiwerk-refresh` is not available, check by hand that every page you wrote or changed, `index.md` included, has all seven frontmatter fields from `SCHEMA.md` and a row in `index.md`.
+
+## Step 7: Report
 
 In under 15 lines: what the project is, how to test it, the three most important gaps, and which stage the user should enable or improve first. Do not paste the pages.

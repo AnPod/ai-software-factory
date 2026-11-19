@@ -59,7 +59,9 @@ For each approved page:
 3. If the content is unchanged, keep it and update `gathered_at`. If it changed, rewrite the content, keep `## Human notes`, update `gathered_at`, `sources` and `confidence`.
 4. Append to `.aiwerk/brain/log.md`: `<now> | aiwerk-refresh | <refreshed|verified> <page> | <short reason>`.
 
-Fix index problems directly: add missing rows, remove rows for pages that no longer exist, and update the `gathered_at` of `index.md`.
+Fix index problems directly: add missing rows, remove rows for pages that no longer exist, and change only `gathered_at` in the frontmatter of `index.md`.
+
+When you changed anything, run the checker from Step 1 again with `--strict` and fix what it reports until it shows 0 problems.
 
 ## Step 4: Report
 

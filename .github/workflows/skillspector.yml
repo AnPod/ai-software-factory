@@ -27,8 +27,8 @@ jobs:
       contents: write          # attach the report to releases
       security-events: write   # upload SARIF to code scanning
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
       - name: Install SkillSpector ${{ env.SKILLSPECTOR_REF }}
@@ -65,14 +65,14 @@ jobs:
           PY
       - name: Upload reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: skillspector-report
           path: reports/
       - name: Upload SARIF to code scanning
         if: always() && github.event_name != 'pull_request'
         continue-on-error: true   # needs code scanning enabled (free for public repositories)
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: reports/skillspector.sarif
           category: skillspector

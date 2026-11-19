@@ -52,6 +52,7 @@ When a skill needs a page whose age is greater than `ttl_days`, it tells the use
 - Keep pages under about 150 lines. Split large topics.
 - A `## Human notes` section belongs to humans. Skills never edit or delete it.
 - When content is re-checked and still correct, update `gathered_at` and add a log line saying it was verified.
+- When you update a page, change only the fields you mean to change. Every page, `index.md` included, keeps all seven frontmatter fields.
 
 ## Files
 
