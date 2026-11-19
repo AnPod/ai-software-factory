@@ -1,0 +1,25 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "aiwerk-skills",
+  "description": "AI Werk Skills: open Agent Skills for intake, orchestration, eval and governance, release and operations.",
+  "owner": {
+    "name": "AI WERK d.o.o.",
+    "url": "https://aiwerk.si"
+  },
+  "plugins": [
+    {
+      "name": "aiwerk-skills",
+      "description": "All 23 AI Werk Skills (setup, stages 01 to 05 and meta) with the Markdown project brain.",
+      "version": "0.4.0",
+      "author": {
+        "name": "AI WERK d.o.o.",
+        "url": "https://aiwerk.si"
+      },
+      "source": "./",
+      "category": "development",
+      "homepage": "https://github.com/AnPod/softwarefactory",
+      "repository": "https://github.com/AnPod/softwarefactory",
+      "license": "Apache-2.0"
+    }
+  ]
+}

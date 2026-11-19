@@ -2,6 +2,16 @@
 
 All notable changes to AI Werk Skills are recorded here.
 
+## [0.4.0] - 2026-11-19
+
+### Added
+
+- Meta skills: `aiwerk-health` (writes `.aiwerk/brain/health.md` and self-contained `.aiwerk/brain/health.html`) and `aiwerk-skill-audit` (audits every installed project skill with NVIDIA SkillSpector when installed, or explains how to install it and stops).
+- Brain schema TTL entry for `skill-audit` and file listing for `health.md`, `health.html` and `skill-audit.md`.
+- Claude Code plugin and marketplace manifests in `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json`, plus harness-specific install notes in `README.md` for Claude Code, GitHub Copilot CLI, OpenAI Codex and OpenCode.
+- Example headless GitHub Actions recipes in `recipes/github-actions/` (`issue-intake-and-spec.yml` and `pr-governance-gates.yml`) for `copilot -p` and `claude -p` with narrow tool allowlists matching `evals/run_evals.py`.
+- Deterministic eval cases, stand-in agent tests (covering both installed and missing SkillSpector paths) and packaging validation tests (`tests/test_packaging.py`).
+
 ## [0.3.0] - 2026-11-19
 
 ### Added

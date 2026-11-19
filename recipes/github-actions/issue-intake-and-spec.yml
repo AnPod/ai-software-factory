@@ -1,0 +1,161 @@
+name: AI Werk intake and spec on issue label
+
+# Example workflow: when an issue receives the label "aiwerk:spec", run aiwerk-intake
+# and aiwerk-spec headless with GitHub Copilot CLI (copilot -p) or Claude Code (claude -p).
+# Copy this file to .github/workflows/ in your project and pin AIWERK_REF to a release tag.
+
+on:
+  issues:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: "Issue number to process"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  AIWERK_REF: "v0.4.0"
+  COPILOT_CLI_VERSION: "1.0.105"
+  CLAUDE_CODE_VERSION: "2.1.328"
+  PYTHONDONTWRITEBYTECODE: "1"
+
+jobs:
+  copilot:
+    name: Intake and spec (Copilot CLI)
+    if: >-
+      (github.event_name == 'workflow_dispatch' || github.event.label.name == 'aiwerk:spec') &&
+      secrets.COPILOT_GITHUB_TOKEN != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6
+        with:
+          repository: AnPod/softwarefactory
+          ref: ${{ env.AIWERK_REF }}
+          path: .aiwerk-skills-src
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+      - name: Install AI Werk Skills
+        run: .aiwerk-skills-src/install.sh --project "$PWD" --harness agents --apply
+      - name: Install Copilot CLI ${{ env.COPILOT_CLI_VERSION }}
+        run: npm install -g "@github/copilot@${COPILOT_CLI_VERSION}"
+      - name: Write issue payload to local file safely
+        env:
+          ISSUE_NUMBER: ${{ github.event.issue.number || inputs.issue_number }}
+          ISSUE_TITLE: ${{ github.event.issue.title || '' }}
+          ISSUE_BODY: ${{ github.event.issue.body || '' }}
+          ISSUE_AUTHOR: ${{ github.event.issue.user.login || 'unknown' }}
+          ISSUE_URL: ${{ github.event.issue.html_url || '' }}
+        run: |
+          python3 - <<'PY'
+          import os
+          os.makedirs(".aiwerk/tmp", exist_ok=True)
+          num = os.environ["ISSUE_NUMBER"].strip()
+          with open(".aiwerk/tmp/issue.md", "w", encoding="utf-8") as fh:
+              fh.write("# GH-%s: %s\n\n" % (num, os.environ["ISSUE_TITLE"]))
+              fh.write("- Requester: @%s\n" % os.environ["ISSUE_AUTHOR"])
+              fh.write("- Link: %s\n\n" % os.environ["ISSUE_URL"])
+              fh.write(os.environ["ISSUE_BODY"] + "\n")
+          PY
+      - name: Run aiwerk-intake and aiwerk-spec with copilot -p
+        env:
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number || inputs.issue_number }}
+        run: |
+          PROMPT="Use the aiwerk-intake skill to capture .aiwerk/tmp/issue.md as ticket GH-${ISSUE_NUMBER}, then use the aiwerk-spec skill to write a specification for GH-${ISSUE_NUMBER}. Non-interactive mode: do not ask me any questions, use detected values and defaults, and record your assumptions."
+          copilot --no-auto-update -p "$PROMPT" --silent --no-ask-user --no-color \
+            --disable-builtin-mcps --model auto \
+            --secret-env-vars=COPILOT_GITHUB_TOKEN,GH_TOKEN,GITHUB_TOKEN,ANTHROPIC_API_KEY \
+            --allow-tool=write \
+            "--allow-tool=shell(git:*)" \
+            "--allow-tool=shell(ls:*)" \
+            "--allow-tool=shell(python3:*)" \
+            "--allow-tool=shell(command:*)" \
+            "--allow-tool=shell(mkdir:*)" \
+            "--allow-tool=shell(cp:*)" \
+            "--allow-tool=shell(date:*)" \
+            "--allow-tool=shell(cat:*)" \
+            "--allow-tool=shell(find:*)" \
+            "--allow-tool=shell(wc:*)" \
+            "--allow-tool=shell(head:*)" \
+            "--deny-tool=shell(git push)" \
+            "--deny-tool=shell(git remote)" \
+            "--deny-tool=shell(curl)" \
+            "--deny-tool=shell(wget)"
+      - name: Validate brain output
+        run: python3 .agents/skills/aiwerk-refresh/scripts/brain_status.py .aiwerk/brain --strict
+      - name: Upload generated spec artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: aiwerk-spec-copilot-GH-${{ github.event.issue.number || inputs.issue_number }}
+          path: .aiwerk/brain/specs/GH-${{ github.event.issue.number || inputs.issue_number }}/
+
+  claude-code:
+    name: Intake and spec (Claude Code)
+    if: >-
+      (github.event_name == 'workflow_dispatch' || github.event.label.name == 'aiwerk:spec') &&
+      secrets.ANTHROPIC_API_KEY != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6
+        with:
+          repository: AnPod/softwarefactory
+          ref: ${{ env.AIWERK_REF }}
+          path: .aiwerk-skills-src
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+      - name: Install AI Werk Skills
+        run: .aiwerk-skills-src/install.sh --project "$PWD" --harness claude --apply
+      - name: Install Claude Code ${{ env.CLAUDE_CODE_VERSION }}
+        run: npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
+      - name: Write issue payload to local file safely
+        env:
+          ISSUE_NUMBER: ${{ github.event.issue.number || inputs.issue_number }}
+          ISSUE_TITLE: ${{ github.event.issue.title || '' }}
+          ISSUE_BODY: ${{ github.event.issue.body || '' }}
+          ISSUE_AUTHOR: ${{ github.event.issue.user.login || 'unknown' }}
+          ISSUE_URL: ${{ github.event.issue.html_url || '' }}
+        run: |
+          python3 - <<'PY'
+          import os
+          os.makedirs(".aiwerk/tmp", exist_ok=True)
+          num = os.environ["ISSUE_NUMBER"].strip()
+          with open(".aiwerk/tmp/issue.md", "w", encoding="utf-8") as fh:
+              fh.write("# GH-%s: %s\n\n" % (num, os.environ["ISSUE_TITLE"]))
+              fh.write("- Requester: @%s\n" % os.environ["ISSUE_AUTHOR"])
+              fh.write("- Link: %s\n\n" % os.environ["ISSUE_URL"])
+              fh.write(os.environ["ISSUE_BODY"] + "\n")
+          PY
+      - name: Run aiwerk-intake and aiwerk-spec with claude -p
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ISSUE_NUMBER: ${{ github.event.issue.number || inputs.issue_number }}
+        run: |
+          PROMPT="Use the aiwerk-intake skill to capture .aiwerk/tmp/issue.md as ticket GH-${ISSUE_NUMBER}, then use the aiwerk-spec skill to write a specification for GH-${ISSUE_NUMBER}. Non-interactive mode: do not ask me any questions, use detected values and defaults, and record your assumptions."
+          printf '%s' "$PROMPT" | claude -p --output-format text --permission-mode acceptEdits \
+            --allowedTools \
+            Read Write Edit Glob Grep Skill \
+            "Bash(git:*)" "Bash(ls:*)" "Bash(python3:*)" "Bash(command -v:*)" "Bash(mkdir:*)" \
+            "Bash(cp:*)" "Bash(date:*)" "Bash(cat:*)" "Bash(find:*)" "Bash(wc:*)" "Bash(head:*)"
+      - name: Validate brain output
+        run: python3 .claude/skills/aiwerk-refresh/scripts/brain_status.py .aiwerk/brain --strict
+      - name: Upload generated spec artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: aiwerk-spec-claude-GH-${{ github.event.issue.number || inputs.issue_number }}
+          path: .aiwerk/brain/specs/GH-${{ github.event.issue.number || inputs.issue_number }}/

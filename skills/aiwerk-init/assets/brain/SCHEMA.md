@@ -41,6 +41,7 @@ Source prefixes: `git:<branch>@<commit>`, `file:<path>`, `mcp:<server>/<resource
 | `spec/release`, `spec/deploy` | 7 | Release drafts and deploy checklists belong to the current change |
 | `incident`, `incident/*` | 7 | Operational context decays fast |
 | `slo` | 7 | SLO status and error budgets shift weekly |
+| `skill-audit` | 7 | Installed skills can change between runs |
 | `health` | 1 | Regenerated on every run |
 | `index` | 1 | Rewritten whenever a page changes |
 
@@ -67,4 +68,6 @@ When a skill needs a page whose age is greater than `ttl_days`, it tells the use
 - `landscape.md`: tools, MCP servers, CLIs and consent from `aiwerk-landscape`.
 - `project/`: what the project is, from `aiwerk-survey`.
 - `slo.md`: service level objectives and error budgets, from `aiwerk-slo`.
+- `health.md`, `health.html`: factory health snapshot and static report, from `aiwerk-health`.
+- `skill-audit.md`: SkillSpector security audit of installed skills, from `aiwerk-skill-audit`.
 - `decisions/`, `policies/`, `specs/`, `incidents/`: added by later skills.

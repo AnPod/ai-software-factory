@@ -40,7 +40,7 @@ Other harnesses: `--harness copilot,opencode,cursor,gemini,droid` or `--harness 
 1. **`aiwerk-init`** asks which harnesses you use, where work comes in (Slack, Jira, Confluence, Linear, GitHub), what may trigger an agent, which stages to switch on and how autonomous agents may be.
 2. **`aiwerk-landscape`** finds the MCP servers, CLIs, plugins and browser tools your agents can reach, places them on the delivery stages and asks for your consent per source.
 3. **`aiwerk-survey`** reads the project into the brain: stack, commands, architecture, owners, conventions and gaps, each with sources.
-4. **Stage skills** (rolling out, see below) take work from intake to operations. Each reads the brain first and writes what it learns back.
+4. **Stage skills** (see below) take work from intake to operations. Each reads the brain first and writes what it learns back.
 
 ### The brain
 
@@ -64,7 +64,7 @@ When a skill needs a page older than its `ttl_days`, it tells you its age and as
 
 ## Skills
 
-The stages follow a five-station delivery line. Stage skills are released in order.
+The stages follow a five-station delivery line. All 23 skills across setup, stages 01 to 05 and meta are available.
 
 | Skill | Stage | What it does | Status |
 |---|---|---|---|
@@ -89,8 +89,8 @@ The stages follow a five-station delivery line. Stage skills are released in ord
 | `aiwerk-incident` | 05 Operations | Triage from Datadog, Sentry, PagerDuty, Grafana | available |
 | `aiwerk-incident-to-spec` | 05 Operations | Turns a resolved incident into a new spec | available |
 | `aiwerk-slo` | 05 Operations | Summarises SLOs and error budgets | available |
-| `aiwerk-health` | Meta | Stage rollout, brain freshness, connector coverage | planned |
-| `aiwerk-skill-audit` | Meta | Scans every installed skill with SkillSpector | planned |
+| `aiwerk-health` | Meta | Stage rollout, brain freshness, connector coverage | available |
+| `aiwerk-skill-audit` | Meta | Scans every installed skill with SkillSpector | available |
 
 ## Harness support
 
@@ -106,6 +106,25 @@ The stages follow a five-station delivery line. Stage skills are released in ord
 | Factory Droid | `.factory/skills` | `droid exec` |
 
 Claude Code and GitHub Copilot CLI are tested end to end in CI. The others read the same `SKILL.md` format; reports from users are welcome.
+
+### Installing per harness
+
+- **Claude Code (plugin marketplace):** add this repository as a marketplace and install the plugin directly from Claude Code:
+  ```text
+  /plugin marketplace add AnPod/softwarefactory
+  /plugin install aiwerk-skills@aiwerk-skills
+  ```
+  Or install from a local clone with `~/aiwerk-skills/install.sh --harness claude --apply`.
+- **GitHub Copilot CLI:** run `~/aiwerk-skills/install.sh --harness copilot --apply` in your repository (links into `.agents/skills`; Copilot CLI also reads `.github/skills` and `.claude/skills`). Add `--scope user` to install for every project.
+- **OpenAI Codex:** run `~/aiwerk-skills/install.sh --harness codex --apply` (links into `.agents/skills`, or `~/.agents/skills` with `--scope user`).
+- **OpenCode:** run `~/aiwerk-skills/install.sh --harness opencode --apply` (links into `.opencode/skills`, or `${XDG_CONFIG_HOME:-$HOME/.config}/opencode/skills` with `--scope user`; OpenCode also reads `.claude/skills` and `.agents/skills`).
+
+### Headless CI recipes
+
+See [recipes/github-actions/](recipes/github-actions/README.md) for two copy-and-paste GitHub Actions workflows that run AI Werk Skills headless with `copilot -p` or `claude -p` using narrow tool allowlists:
+
+- [issue-intake-and-spec.yml](recipes/github-actions/issue-intake-and-spec.yml): turns an issue labelled `aiwerk:spec` into a brain ticket and spec.
+- [pr-governance-gates.yml](recipes/github-actions/pr-governance-gates.yml): runs stage 03 review, test, security and policy gates on same-repository pull requests.
 
 ## Safety
 

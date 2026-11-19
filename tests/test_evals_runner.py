@@ -17,13 +17,14 @@ EXPECTED_CASES = {
     "review", "test-gate", "security-gate", "policy",
     "release", "deploy-check", "docs-sync",
     "incident", "incident-to-spec", "slo",
+    "health", "skill-audit",
 }
 
 
-def run(mode):
-    env = dict(os.environ, FAKE_AGENT_MODE=mode)
+def run(mode, extra_args=(), skillspector_mode="installed"):
+    env = dict(os.environ, FAKE_AGENT_MODE=mode, AIWERK_SKILLSPECTOR_MODE=skillspector_mode)
     env.pop("GITHUB_STEP_SUMMARY", None)
-    r = subprocess.run([sys.executable, RUNNER, "--agent-cmd", FAKE], cwd=ROOT, env=env,
+    r = subprocess.run([sys.executable, RUNNER, "--agent-cmd", FAKE] + list(extra_args), cwd=ROOT, env=env,
                        capture_output=True, text=True, timeout=300)
     with open(os.path.join(ROOT, "evals", "results", "results.json"), encoding="utf-8") as fh:
         return r, json.load(fh)
@@ -59,6 +60,18 @@ class EvalRunnerTest(unittest.TestCase):
         self.assertIn("does not copy secrets from MCP config", failed["incident"])
         self.assertIn("links back to the resolved incident", failed["incident-to-spec"])
         self.assertIn("reports missing live telemetry honestly", failed["slo"])
+        self.assertIn("health.html makes no external URL requests", failed["health"])
+        self.assertIn("audits third-party installed skills, not only aiwerk skills", failed["skill-audit"])
+
+    def test_skill_audit_missing_mode(self):
+        r, data = run("good", extra_args=("--cases", "skill-audit"), skillspector_mode="missing")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual([x["case"] for x in data["results"]], ["skill-audit"])
+
+        r_bad, data_bad = run("bad", extra_args=("--cases", "skill-audit"), skillspector_mode="missing")
+        self.assertEqual(r_bad.returncode, 1)
+        failed = [c["check"] for c in data_bad["results"][0]["checks"] if not c["ok"]]
+        self.assertIn("stops without changing brain when SkillSpector is missing", failed)
 
 
 if __name__ == "__main__":
