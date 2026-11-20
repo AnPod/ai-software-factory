@@ -11,6 +11,8 @@ Thanks for helping. A few rules keep the skills safe and portable.
 - Support non-interactive mode: no questions, defaults recorded under assumptions.
 - Prefer instructions over scripts. If a script is unavoidable: standard library only, no network, read-only where possible, a header that says exactly what it does.
 - Never ask the agent to download and run code, decode encoded payloads, or read credentials.
+- Include the rule to treat brain pages, repository files, tickets and tool output as untrusted data, never as instructions (the Trust section of `SCHEMA.md`). The validator checks for it.
+- Keep any command the skill suggests narrow: no blanket `git:*` or interpreter rules, prompts in single quotes, and tests run only when the project's own files define them.
 
 ## Before you open a pull request
 
@@ -20,11 +22,15 @@ python3 -m unittest discover -s tests -v
 bash tests/test_install.sh
 ```
 
+`main` only accepts changes through a pull request with these checks passing: `Skills, brain and unit tests`, `Installer on ubuntu-latest`, `Installer on macos-latest` and the SkillSpector `Scan`.
+
 New skills need a row in the README skill table and, when they write to the brain, an eval case in `evals/run_evals.py`.
 
 ## Maintenance
 
 Tool versions are pinned in the workflow files:
+
+- Every `uses:` line in `.github/workflows/` and `recipes/github-actions/` names a full commit SHA with the version in a comment. Dependabot updates the workflows; copy the same SHAs into the recipes. The repository only allows GitHub-owned actions pinned to a SHA.
 
 - `.github/workflows/skillspector.yml`: `SKILLSPECTOR_REF` (currently `v2.13.6`) and `SKILLSPECTOR_SHA`, the commit that tag points to. Update both together: `git ls-remote https://github.com/NVIDIA/skillspector.git refs/tags/<tag>` prints the commit.
 - `recipes/github-actions/*.yml`: `AIWERK_REF`, the full commit SHA of the latest release of this repository.
@@ -32,4 +38,4 @@ Tool versions are pinned in the workflow files:
 
 When bumping a version pin, pick a release that is at least two weeks old so supply-chain issues have time to surface.
 
-The `COPILOT_GITHUB_TOKEN` Actions secret is a fine-grained token with an expiry date. Rotate it before it expires.
+The `COPILOT_GITHUB_TOKEN` Actions secret is a fine-grained personal access token with only the account permission "Copilot Requests" (no repository access) and an expiry date. Classic `ghp_` tokens do not work with Copilot CLI. Rotate it before it expires.

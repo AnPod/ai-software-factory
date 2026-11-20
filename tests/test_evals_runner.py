@@ -22,7 +22,7 @@ EXPECTED_CASES = {
 
 
 def run(mode, extra_args=(), skillspector_mode="installed"):
-    env = dict(os.environ, FAKE_AGENT_MODE=mode, AIWERK_SKILLSPECTOR_MODE=skillspector_mode)
+    env = dict(os.environ, AIWERK_FAKE_AGENT_MODE=mode, AIWERK_SKILLSPECTOR_MODE=skillspector_mode)
     env.pop("GITHUB_STEP_SUMMARY", None)
     r = subprocess.run([sys.executable, RUNNER, "--agent-cmd", FAKE] + list(extra_args), cwd=ROOT, env=env,
                        capture_output=True, text=True, timeout=300)
@@ -72,6 +72,46 @@ class EvalRunnerTest(unittest.TestCase):
         self.assertEqual(r_bad.returncode, 1)
         failed = [c["check"] for c in data_bad["results"][0]["checks"] if not c["ok"]]
         self.assertIn("stops without changing brain when SkillSpector is missing", failed)
+
+
+class AgentLimitsTest(unittest.TestCase):
+    def setUp(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("run_evals", RUNNER)
+        self.mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.mod)
+
+    def test_agent_env_drops_secrets_and_runner_files(self):
+        fake = {"PATH": "/usr/bin", "HOME": "/home/x", "GITHUB_ENV": "/tmp/env", "GITHUB_OUTPUT": "/tmp/out",
+                "OTHER_SECRET": "s", "ANTHROPIC_API_KEY": "a", "COPILOT_GITHUB_TOKEN": "c", "AIWERK_X": "1"}
+        old = dict(os.environ)
+        try:
+            os.environ.clear()
+            os.environ.update(fake)
+            copilot = self.mod.agent_env("copilot", "init")
+            claude = self.mod.agent_env("claude", "init")
+            custom = self.mod.agent_env("custom", "init")
+        finally:
+            os.environ.clear()
+            os.environ.update(old)
+        for env in (copilot, claude, custom):
+            for k in ("GITHUB_ENV", "GITHUB_OUTPUT", "OTHER_SECRET"):
+                self.assertNotIn(k, env)
+            self.assertEqual(env["AIWERK_X"], "1")
+            self.assertEqual(env["AIWERK_EVAL_CASE"], "init")
+        self.assertIn("COPILOT_GITHUB_TOKEN", copilot)
+        self.assertNotIn("ANTHROPIC_API_KEY", copilot)
+        self.assertIn("ANTHROPIC_API_KEY", claude)
+        self.assertNotIn("COPILOT_GITHUB_TOKEN", claude)
+        self.assertNotIn("ANTHROPIC_API_KEY", custom)
+
+    def test_no_interpreter_or_blanket_rules(self):
+        allowed = " ".join(self.mod.CLAUDE_TOOLS + self.mod.COPILOT_TOOLS)
+        for rule in ("Bash(git:*)", "shell(git:*)", "Bash(python3:*)", "shell(python3:*)", "shell(command:*)",
+                     "Bash(cat:*)", "shell(cat:*)", "Bash(find:*)", "shell(find:*)", "Bash(cp:*)", "shell(cp:*)"):
+            self.assertNotIn(rule, allowed)
+        self.assertIn("write(.git/**)", self.mod.COPILOT_DENY)
+        self.assertIn("Edit(.git/**)", self.mod.CLAUDE_DENY)
 
 
 if __name__ == "__main__":

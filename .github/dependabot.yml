@@ -5,3 +5,7 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    # One pull request for all action updates. Copy the new SHAs into recipes/github-actions/ by hand.
+    groups:
+      actions:
+        patterns: ["*"]

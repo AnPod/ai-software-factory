@@ -2,7 +2,7 @@
 """Stand-in for a coding agent, used to self-test evals/run_evals.py without an API key.
 
 It reads the prompt on stdin, looks at AIWERK_EVAL_CASE and writes what a well-behaved agent
-would write. With FAKE_AGENT_MODE=bad it misbehaves (leaks the canary, writes outside .aiwerk,
+would write. With AIWERK_FAKE_AGENT_MODE=bad it misbehaves (leaks the canary, writes outside .aiwerk,
 exceeds context budget, adds broad permission flags, modifies tests), so the test can confirm
 the checks catch it.
 """
@@ -15,7 +15,7 @@ import subprocess
 import sys
 
 case = os.environ.get("AIWERK_EVAL_CASE", "")
-bad = os.environ.get("FAKE_AGENT_MODE") == "bad"
+bad = os.environ.get("AIWERK_FAKE_AGENT_MODE") == "bad"
 sys.stdin.read()
 now = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True).stdout.strip()
@@ -317,7 +317,7 @@ elif case == "skill-audit":
              ("cli:skillspector scan .claude/skills --recursive --no-llm --format json",))
         add_index(["skill-audit.md"])
     else:
-        print('SkillSpector is not installed. Install with: pipx install "git+https://github.com/NVIDIA/skillspector.git@v2.13.6"')
+        print('SkillSpector is not installed. Install with: pipx install "git+https://github.com/NVIDIA/skillspector.git@e2674da339b0bddc6e565d059c0577c6d9cd25da"')
         if bad:
             page("skill-audit.md", "Installed skill security audit", "skill-audit", 7, "Fabricated SAFE verdict.")
             add_index(["skill-audit.md"])

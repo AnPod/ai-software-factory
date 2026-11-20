@@ -91,6 +91,37 @@ class BrainStatusTest(unittest.TestCase):
         self.assertIn("possible secret (github-token)", out)
         self.assertNotIn(token, out)
 
+    def test_new_credential_shapes_and_health_html(self):
+        self.write("health.html", "<p>hooks.slack.com/services/T0000/B0000/abcdefabcdef</p>\n")
+        _, problems = self.statuses()
+        self.assertTrue(any(p["page"] == "health.html" and "slack-webhook" in p["problem"] for p in problems))
+
+    def test_symlinked_page_is_not_followed(self):
+        outside = os.path.join(self.dir, "outside.md")
+        with open(outside, "w", encoding="utf-8") as fh:
+            fh.write(page("Outside", "project/outside", "2026-11-18T12:00:00Z", 14, "ghp_" + "b" * 36 + "\n"))
+        os.symlink(outside, os.path.join(self.brain, "project", "linked.md"))
+        status, problems = self.statuses()
+        self.assertNotIn("project/linked.md", status)
+        self.assertTrue(any("symbolic link" in p["problem"] for p in problems))
+        self.assertFalse(any("github-token" in p["problem"] for p in problems))
+
+    def test_index_links_outside_the_brain_are_not_checked(self):
+        self.write("index.md", page("Brain index", "index", "2026-11-19T11:00:00Z", 1,
+                   "| [project/stack.md](project/stack.md) |\n| [project/owners.md](project/owners.md) |\n"
+                   "| [x](../../etc/passwd.md) |\n| [y](/tmp/abs.md) |\n"))
+        _, problems = self.statuses()
+        self.assertTrue(any("2 link(s) point outside" in p["problem"] for p in problems))
+        self.assertFalse(any("passwd" in p["problem"] or "abs.md" in p["problem"] for p in problems))
+
+    def test_printed_metadata_is_cleaned(self):
+        text = page("Stack", "project/stack", "2026-11-18T12:00:00Z", 14).replace(
+            "gathered_by: aiwerk-survey", "gathered_by: \x1b[2J ghp_" + "c" * 36)
+        self.write("project/stack.md", text)
+        code, out = self.run_main()
+        self.assertNotIn("\x1b", out)
+        self.assertNotIn("c" * 36, out)
+
     def test_bad_values(self):
         self.write("project/stack.md", page("Stack", "project/stack", "yesterday", 14))
         _, problems = self.statuses()

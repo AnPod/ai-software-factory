@@ -38,22 +38,48 @@ STATUS = os.path.join(ROOT, "skills", "aiwerk-refresh", "scripts", "brain_status
 RESULTS = os.path.join(ROOT, "evals", "results")
 CANARY = "eval-canary-7f3a9c"
 
+# The same limits as recipes/github-actions: file tools, read-only git, a few harmless commands,
+# and the test commands the test-gate case needs. No interpreters, no blanket git, no cat or find.
+READ_ONLY_GIT = ["status", "log", "diff", "show", "rev-parse", "branch", "ls-files", "shortlog", "tag"]
 CLAUDE_TOOLS = [
     "Read", "Write", "Edit", "Glob", "Grep", "Skill",
-    "Bash(git:*)", "Bash(ls:*)", "Bash(python3:*)", "Bash(command -v:*)", "Bash(mkdir:*)",
-    "Bash(cp:*)", "Bash(date:*)", "Bash(cat:*)", "Bash(find:*)", "Bash(wc:*)", "Bash(head:*)",
+    "Bash(git status:*)", "Bash(git log:*)", "Bash(git diff:*)", "Bash(git show:*)", "Bash(git rev-parse:*)",
+    "Bash(git branch --show-current)", "Bash(git ls-files:*)", "Bash(git shortlog:*)", "Bash(git tag --sort:*)",
+    "Bash(git tag --list:*)", "Bash(ls:*)", "Bash(date:*)", "Bash(mkdir:*)", "Bash(wc:*)", "Bash(command -v:*)",
+    "Bash(python3 .claude/skills/aiwerk-refresh/scripts/brain_status.py:*)",
     "Bash(pytest:*)", "Bash(make test)", "Bash(make lint)", "Bash(skillspector:*)",
 ]
+CLAUDE_DENY = ["Edit(.git/**)", "Edit(.claude/**)", "Edit(.agents/**)", "Edit(.github/**)"]
 
 # Copilot CLI denies every tool that no rule allows when it runs non-interactively.
 # Reading files inside the project is allowed by default.
-COPILOT_TOOLS = [
-    "write", "shell(git:*)", "shell(ls:*)", "shell(python3:*)", "shell(command:*)", "shell(mkdir:*)",
-    "shell(cp:*)", "shell(date:*)", "shell(cat:*)", "shell(find:*)", "shell(wc:*)", "shell(head:*)",
+COPILOT_TOOLS = ["write"] + ["shell(git %s)" % sub for sub in READ_ONLY_GIT] + [
+    "shell(ls:*)", "shell(date:*)", "shell(mkdir:*)", "shell(wc:*)",
     "shell(pytest:*)", "shell(make test)", "shell(make lint)", "shell(skillspector:*)",
 ]
-COPILOT_DENY = ["shell(git push)", "shell(git remote)", "shell(curl)", "shell(wget)"]
+COPILOT_DENY = [
+    "shell(git push)", "shell(git remote)", "shell(git config)", "shell(curl)", "shell(wget)",
+    "shell(python3:*)", "shell(python:*)", "shell(node:*)",
+    "write(.git/**)", "write(.github/**)", "write(.agents/**)", "write(.claude/**)",
+]
 TOKEN_VARS = "COPILOT_GITHUB_TOKEN,GH_TOKEN,GITHUB_TOKEN,ANTHROPIC_API_KEY"
+
+# The agent gets only these variables from the environment, plus AIWERK_* and the key of its own
+# harness. Nothing else reaches it: no other secrets and no runner file commands such as GITHUB_ENV.
+AGENT_ENV = (
+    "PATH", "HOME", "USER", "LOGNAME", "SHELL", "LANG", "LC_ALL", "LC_CTYPE", "TERM", "TZ",
+    "TMPDIR", "TMP", "TEMP", "XDG_CONFIG_HOME", "XDG_CACHE_HOME", "XDG_DATA_HOME", "XDG_RUNTIME_DIR",
+    "SSL_CERT_FILE", "SSL_CERT_DIR", "NODE_EXTRA_CA_CERTS", "HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY",
+    "https_proxy", "http_proxy", "no_proxy", "PYTHONDONTWRITEBYTECODE", "CI", "SYSTEMROOT",
+)
+HARNESS_KEYS = {"claude": ("ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL"), "copilot": ("COPILOT_GITHUB_TOKEN",)}
+
+
+def agent_env(harness, case):
+    keys = HARNESS_KEYS.get(harness, ())
+    env = {k: v for k, v in os.environ.items() if k in AGENT_ENV or k in keys or k.startswith("AIWERK_")}
+    env["AIWERK_EVAL_CASE"] = case
+    return env
 
 # Where each harness looks for skills (install.sh --harness value).
 SKILL_FOLDERS = {"claude": "claude", "copilot": "agents", "custom": "claude,agents"}
@@ -1140,7 +1166,7 @@ def agent_command(args, prompt):
             cmd += ["--max-ai-credits", str(args.max_credits)]
         return cmd, None
     cmd = ["claude", "-p", "--output-format", "text", "--permission-mode", "acceptEdits",
-           "--allowedTools"] + CLAUDE_TOOLS
+           "--allowedTools"] + CLAUDE_TOOLS + ["--disallowedTools"] + CLAUDE_DENY
     if args.model:
         cmd[1:1] = ["--model", args.model]
     return cmd, prompt
@@ -1151,7 +1177,7 @@ def run_case(name, args, workdir):
     project = make_project(workdir, "custom" if args.agent_cmd else args.harness)
     seed(project, case["seed"])
     before = tree_hash(os.path.join(project, ".aiwerk")) if case["seed"] else None
-    env = dict(os.environ, AIWERK_EVAL_CASE=name)
+    env = agent_env("custom" if args.agent_cmd else args.harness, name)
     start = time.time()
     try:
         argv, stdin = agent_command(args, case["prompt"])

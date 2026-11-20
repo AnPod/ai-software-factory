@@ -18,10 +18,13 @@
 #   --apply     make the changes. Without it nothing is written.
 #   --uninstall remove skills this script installed (only links into this repo,
 #               or copies that carry the .aiwerk-installed marker)
+#
+# In project scope the script refuses to write through a symbolic link inside the
+# project (for example a .claude folder that points somewhere else).
 
 set -euo pipefail
 
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 SKILLS_DIR="$REPO_DIR/skills"
 MARKER=".aiwerk-installed"
 
@@ -42,14 +45,14 @@ while [ $# -gt 0 ]; do
     --copy) mode="copy"; shift ;;
     --apply) apply=1; shift ;;
     --uninstall) uninstall=1; shift ;;
-    -h|--help) sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) awk 'NR == 1 { next } /^#/ { sub(/^# ?/, ""); print; next } { exit }' "$0"; exit 0 ;;
     *) die "unknown option: $1 (see --help)" ;;
   esac
 done
 
 case "$scope" in project|user) ;; *) die "--scope must be project or user" ;; esac
 [ -d "$project" ] || die "project folder not found: $project"
-project="$(cd "$project" && pwd)"
+project="$(cd -- "$project" && pwd -P)"
 
 target_dir() {
   local h="$1"
@@ -95,9 +98,32 @@ run() {
   if [ "$apply" -eq 1 ]; then "$@"; else echo "  would run: $*"; fi
 }
 
+# True when $1 is a symbolic link that resolves to the skill folder $2.
+links_to() {
+  [ -L "$1" ] && [ "$(cd -- "$1" 2>/dev/null && pwd -P)" = "$2" ]
+}
+
+# True when $1 is a real folder (not a link) holding our marker and the SKILL.md of skill $2.
+our_copy() {
+  [ -d "$1" ] && [ ! -L "$1" ] && [ -f "$1/$MARKER" ] && [ ! -L "$1/$MARKER" ] &&
+    grep -qx "name: $2" "$1/SKILL.md" 2>/dev/null
+}
+
+# In project scope, refuse destinations reached through a symbolic link inside the project.
+check_contained() {
+  local p="$1"
+  [ "$scope" = "project" ] || return 0
+  while [ "$p" != "$project" ] && [ "$p" != "/" ]; do
+    [ -L "$p" ] && die "$p is a symbolic link; refusing to install through it"
+    p="$(dirname -- "$p")"
+  done
+}
+
 skills=()
 for d in "$SKILLS_DIR"/*/; do
-  [ -f "$d/SKILL.md" ] && skills+=("$(basename "$d")")
+  d="${d%/}"
+  [ -L "$d" ] && continue
+  [ -f "$d/SKILL.md" ] && skills+=("$(basename -- "$d")")
 done
 [ "${#skills[@]}" -gt 0 ] || die "no skills found in $SKILLS_DIR"
 
@@ -107,6 +133,11 @@ fi
 echo "Skills: ${skills[*]}"
 echo
 
+for h in "${harnesses[@]}"; do
+  dest="$(target_dir "$h")"
+  check_contained "$dest"
+done
+
 changes=0
 for h in "${harnesses[@]}"; do
   dest="$(target_dir "$h")"
@@ -115,33 +146,33 @@ for h in "${harnesses[@]}"; do
     src="$SKILLS_DIR/$s"
     dst="$dest/$s"
     if [ "$uninstall" -eq 1 ]; then
-      if [ -L "$dst" ] && [ "$(readlink "$dst")" = "$src" ]; then
-        run rm "$dst"; changes=$((changes + 1))
-      elif [ -d "$dst" ] && [ -f "$dst/$MARKER" ]; then
-        run rm -r "$dst"; changes=$((changes + 1))
+      if links_to "$dst" "$src"; then
+        run rm -- "$dst"; changes=$((changes + 1))
+      elif our_copy "$dst" "$s"; then
+        run rm -r -- "$dst"; changes=$((changes + 1))
       elif [ -e "$dst" ] || [ -L "$dst" ]; then
         echo "  skip $s: not installed by this script, left alone"
       fi
       continue
     fi
-    if [ -L "$dst" ] && [ "$(readlink "$dst")" = "$src" ]; then
+    if links_to "$dst" "$src"; then
       echo "  ok   $s (already linked)"
       continue
     fi
     if [ -e "$dst" ] || [ -L "$dst" ]; then
-      if [ "$mode" = "copy" ] && [ -f "$dst/$MARKER" ]; then
-        run rm -r "$dst"
+      if [ "$mode" = "copy" ] && our_copy "$dst" "$s"; then
+        run rm -r -- "$dst"
       else
         echo "  skip $s: $dst already exists and was not installed by this script"
         continue
       fi
     fi
-    run mkdir -p "$dest"
+    run mkdir -p -- "$dest"
     if [ "$mode" = "link" ]; then
-      run ln -s "$src" "$dst"
+      run ln -s -- "$src" "$dst"
     else
-      run cp -R "$src" "$dst"
-      run touch "$dst/$MARKER"
+      run cp -R -- "$src" "$dst"
+      run touch -- "$dst/$MARKER"
     fi
     changes=$((changes + 1))
   done

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Report the freshness and health of an AI Werk brain folder.
 
-Read-only: it opens Markdown files under the given folder, makes no network
-calls and writes nothing. Standard library only.
+Read-only: it opens the Markdown pages and health.html under the given folder,
+makes no network calls and writes nothing. It does not follow symbolic links and
+ignores index links that point outside the folder. Standard library only.
 
 Usage:
   python3 brain_status.py .aiwerk/brain [--json] [--strict] [--fail-on-stale]
@@ -26,17 +27,37 @@ CONFIDENCE = ("low", "medium", "high")
 EXEMPT = ("SCHEMA.md", "log.md")
 PLACEHOLDER = "{{NOW}}"
 
-# Patterns that look like credentials. Only the file and line are reported, never the match.
-SECRET_PATTERNS = [
-    ("aws-access-key", re.compile(r"\bAKIA[0-9A-Z]{16}\b")),
+# Shapes of leaked credentials. Only the file, line and shape name are reported, never the match.
+LEAK_SHAPES = [
+    ("aws-access-key", re.compile(r"\b(AKIA|ASIA)[0-9A-Z]{16}\b")),
     ("github-token", re.compile(r"\bgh[pousr]_[A-Za-z0-9]{36,}\b")),
     ("github-pat", re.compile(r"\bgithub_pat_[A-Za-z0-9_]{40,}\b")),
+    ("gitlab-token", re.compile(r"\bglpat-[A-Za-z0-9_-]{20,}\b")),
     ("slack-token", re.compile(r"\bxox[abposr]-[A-Za-z0-9-]{10,}\b")),
+    ("slack-webhook", re.compile(r"hooks\.slack\.com/services/T[A-Za-z0-9]+/B[A-Za-z0-9]+/[A-Za-z0-9]+")),
     ("anthropic-key", re.compile(r"\bsk-ant-[A-Za-z0-9_-]{20,}\b")),
     ("openai-key", re.compile(r"\bsk-(proj-)?[A-Za-z0-9]{32,}\b")),
+    ("stripe-key", re.compile(r"\b[rs]k_live_[A-Za-z0-9]{20,}\b")),
     ("google-api-key", re.compile(r"\bAIza[0-9A-Za-z_-]{35}\b")),
+    ("npm-token", re.compile(r"\bnpm_[A-Za-z0-9]{36}\b")),
+    ("huggingface-token", re.compile(r"\bhf_[A-Za-z0-9]{34,}\b")),
+    ("jwt", re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}")),
+    ("url-with-password", re.compile(r"\b[a-z][a-z0-9+.-]*://[^/\s:@]+:[^/\s@]+@")),
     ("private-key", re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----")),
 ]
+SAFE_LINK = re.compile(r"^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*\.md$")
+CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f]")
+
+
+def leak_shapes(text):
+    """Return the names of credential shapes found in text."""
+    return [name for name, rx in LEAK_SHAPES if rx.search(text)]
+
+
+def clean(value):
+    """Make a value from a page safe to print: no control characters, no credential-shaped text."""
+    value = CONTROL.sub("?", str(value))
+    return "(hidden: looks like a credential)" if leak_shapes(value) else value
 
 
 def parse_frontmatter(text):
@@ -85,36 +106,55 @@ def parse_time(value):
 
 
 def index_targets(index_text):
-    return set(re.findall(r"\]\(([^)#\s]+\.md)\)", index_text))
+    """Return (links inside the brain, number of links that are absolute or leave the brain)."""
+    inside, outside = set(), 0
+    for target in re.findall(r"\]\(([^)#\s]+\.md)\)", index_text):
+        if target.startswith("./"):
+            target = target[2:]
+        if SAFE_LINK.match(target) and ".." not in target.split("/"):
+            inside.add(target)
+        else:
+            outside += 1
+    return inside, outside
+
+
+def scan_for_leaks(rel, text, problems):
+    for lineno, line in enumerate(text.splitlines(), start=1):
+        for name in leak_shapes(line):
+            problems.append({"page": rel, "problem": "possible secret (%s) on line %d" % (name, lineno)})
 
 
 def scan(brain, now, template=False):
     pages, problems = [], []
     index_path = os.path.join(brain, "index.md")
     index_text = ""
-    if os.path.isfile(index_path):
+    if os.path.isfile(index_path) and not os.path.islink(index_path):
         with open(index_path, encoding="utf-8") as fh:
             index_text = fh.read()
     else:
         problems.append({"page": "index.md", "problem": "index.md is missing"})
-    linked = index_targets(index_text)
+    linked, outside = index_targets(index_text)
+    if outside:
+        problems.append({"page": "index.md", "problem": "%d link(s) point outside the brain folder" % outside})
 
     for root, dirs, files in os.walk(brain):
-        dirs[:] = sorted(d for d in dirs if not d.startswith("."))
+        for d in [d for d in dirs if os.path.islink(os.path.join(root, d))]:
+            rel = os.path.relpath(os.path.join(root, d), brain).replace(os.sep, "/")
+            problems.append({"page": clean(rel), "problem": "is a symbolic link, not followed"})
+        dirs[:] = sorted(d for d in dirs if not d.startswith(".") and not os.path.islink(os.path.join(root, d)))
         for name in sorted(files):
-            if not name.endswith(".md"):
+            if not (name.endswith(".md") or name == "health.html"):
                 continue
             path = os.path.join(root, name)
-            rel = os.path.relpath(path, brain).replace(os.sep, "/")
-            with open(path, encoding="utf-8") as fh:
+            rel = clean(os.path.relpath(path, brain).replace(os.sep, "/"))
+            if os.path.islink(path) or not os.path.isfile(path):
+                problems.append({"page": rel, "problem": "is a symbolic link or special file, not read"})
+                continue
+            with open(path, encoding="utf-8", errors="replace") as fh:
                 text = fh.read()
 
-            for lineno, line in enumerate(text.splitlines(), start=1):
-                for label, pattern in SECRET_PATTERNS:
-                    if pattern.search(line):
-                        problems.append({"page": rel, "problem": "possible secret (%s) on line %d" % (label, lineno)})
-
-            if rel in EXEMPT:
+            scan_for_leaks(rel, text, problems)
+            if not name.endswith(".md") or rel in EXEMPT:
                 continue
             if rel != "index.md" and rel not in linked:
                 problems.append({"page": rel, "problem": "not listed in index.md"})
@@ -153,8 +193,9 @@ def scan(brain, now, template=False):
             pages.append(page_row(rel, fm, max(age, 0.0), ttl))
 
     for target in sorted(linked):
-        if not os.path.isfile(os.path.join(brain, target)):
-            problems.append({"page": "index.md", "problem": "links to missing page " + target})
+        path = os.path.join(brain, target)
+        if not os.path.isfile(path) or os.path.islink(path):
+            problems.append({"page": "index.md", "problem": "links to missing page " + clean(target)})
 
     order = {"stale": 0, "soon": 1, "fresh": 2}
     pages.sort(key=lambda p: (order[p["status"]], -p["age_days"]))
@@ -166,8 +207,8 @@ def page_row(rel, fm, age, ttl):
     status = "stale" if ratio > 1 else "soon" if ratio > 0.75 else "fresh"
     return {
         "page": rel,
-        "kind": fm["kind"],
-        "gathered_by": fm["gathered_by"],
+        "kind": clean(fm["kind"]),
+        "gathered_by": clean(fm["gathered_by"]),
         "age_days": round(age, 1),
         "ttl_days": ttl,
         "status": status,
