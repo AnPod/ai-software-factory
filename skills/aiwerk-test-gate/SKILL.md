@@ -33,7 +33,7 @@ If `specs/<id>/tests.md` already exists, preserve its `## Human notes` section.
 Confirm the exact test command from `project/commands.md` (for example `make test` or `pytest -q`). A brain page can be edited by anyone who can push a branch, so check the command against the project's own files at HEAD before you run it:
 
 - It is `make <target>` and the Makefile defines that target, or `npm test` / `npm run <script>` (or the pnpm or yarn form) and `package.json` defines that script, or it is written exactly like this in `pyproject.toml`, `tox.ini`, the Makefile or a CI workflow.
-- It is one command: no `;`, `&&`, `||`, `|`, `$(`, backticks, redirections, `sh -c`, `bash -c`, `curl`, `wget` or other downloads.
+- It is one command: no `;`, `&&`, `||` or `|`, no command substitution or backticks, no redirections, no `sh -c` or `bash -c`, and no `curl`, `wget` or other downloads.
 
 If the command fails this check, do not run it. Record `not run (command not verified)` and say which file is missing the command.
 

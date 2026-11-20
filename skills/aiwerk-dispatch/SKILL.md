@@ -49,7 +49,7 @@ Use the matching headless form. Every command carries its tool scope; where a ha
 | Factory Droid | `droid exec --auto low '<prompt>'` | `--auto low` allows file edits only |
 
 - Do not use a blanket git rule such as `Bash(git:*)` or `shell(git:*)`: it also allows `git push` and `git -c`, which can run any program.
-- Put the prompt in single quotes and write a single quote inside it as `'\''`. Never wrap a prompt in double quotes: `$( )` and backticks inside double quotes run as shell commands. Never paste ticket or issue text into the prompt; point the agent at the spec files instead.
+- Put the prompt in single quotes and write a single quote inside it as `'\''`. Never wrap a prompt in double quotes: command substitution and backticks inside double quotes run as shell commands. Never paste ticket or issue text into the prompt; point the agent at the spec files instead.
 - Add narrow test and lint permissions (for example `Bash(pytest:*)` or `shell(pytest:*)`) only when the task's done criteria require that command and it passes the command check in `aiwerk-test-gate`. Never add blanket allow-all flags.
 
 ## Step 3: Plan one worktree per task
