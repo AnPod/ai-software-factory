@@ -8,8 +8,9 @@ name: Agent evals
 #   Claude Code         ANTHROPIC_API_KEY
 # Agent runs cost credits, so this workflow runs weekly, on demand, and when skills or evals change.
 #
-# The agent gets a filtered environment and narrow tool rules (see evals/run_evals.py). Results and
-# transcripts are uploaded only after a check that they hold no key, and are kept for 7 days.
+# The agent gets a filtered environment and narrow tool rules (see evals/run_evals.py). Only the
+# structured summary files (results.json and summary.md) are staged and uploaded, and only after
+# symlink and key checks pass. Artifacts are kept for 7 days.
 
 on:
   push:
@@ -100,28 +101,40 @@ jobs:
           args=(--harness copilot)
           if [ -n "$CASES" ]; then args+=(--cases "$CASES"); fi
           if [ -n "$MODEL" ]; then args+=(--model "$MODEL"); fi
-          python3 evals/run_evals.py "${args[@]}"
-      - name: Check results for keys
+          env -u GITHUB_STEP_SUMMARY python3 evals/run_evals.py "${args[@]}"
+      - name: Check and stage results
         id: leak
         if: ${{ !cancelled() }}
         env:
           KEY: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+          STAGE: ${{ runner.temp }}/eval-upload
         run: |
           # grep exits 0 on a match, 1 on no match and 2 on an error. Only 1 is safe to upload.
           fail() { echo "::error::$1 Results are not uploaded."; exit 1; }
-          [ -d evals/results ] || fail "No results folder."
+          [ -n "$KEY" ] || fail "Missing key for leak check."
+          [ -d evals/results ] && [ ! -L evals/results ] || fail "No regular results folder."
+          symlinks=$(find evals/results -type l -print -quit)
+          [ -z "$symlinks" ] || fail "Symbolic links found in results."
+          rm -rf "$STAGE"
+          mkdir -p "$STAGE"
+          for name in results.json summary.md; do
+            src="evals/results/$name"
+            [ -f "$src" ] && [ ! -L "$src" ] || fail "Missing regular file: $name."
+            cp -P -- "$src" "$STAGE/$name"
+          done
           set +e
-          grep -rqF -- "$KEY" evals/results; exact=$?
-          grep -rqE -- 'gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{40,}|sk-ant-[A-Za-z0-9_-]{20,}' evals/results; shaped=$?
+          grep -rqF -- "$KEY" "$STAGE"; exact=$?
+          grep -rqE -- 'gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{40,}|sk-ant-[A-Za-z0-9_-]{20,}' "$STAGE"; shaped=$?
           set -e
           [ "$exact" -eq 1 ] || fail "The COPILOT_GITHUB_TOKEN key, or a read error, was found in the results."
           [ "$shaped" -eq 1 ] || fail "A token-shaped string, or a read error, was found in the results."
-      - name: Upload results and transcripts
+          if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then cat "$STAGE/summary.md" >> "$GITHUB_STEP_SUMMARY"; fi
+      - name: Upload results
         if: ${{ !cancelled() && steps.leak.outcome == 'success' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: eval-results-copilot
-          path: evals/results/
+          path: ${{ runner.temp }}/eval-upload/
           retention-days: 7
 
   claude-code:
@@ -153,26 +166,38 @@ jobs:
           args=(--harness claude)
           if [ -n "$CASES" ]; then args+=(--cases "$CASES"); fi
           if [ -n "$MODEL" ]; then args+=(--model "$MODEL"); fi
-          python3 evals/run_evals.py "${args[@]}"
-      - name: Check results for keys
+          env -u GITHUB_STEP_SUMMARY python3 evals/run_evals.py "${args[@]}"
+      - name: Check and stage results
         id: leak
         if: ${{ !cancelled() }}
         env:
           KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          STAGE: ${{ runner.temp }}/eval-upload
         run: |
           # grep exits 0 on a match, 1 on no match and 2 on an error. Only 1 is safe to upload.
           fail() { echo "::error::$1 Results are not uploaded."; exit 1; }
-          [ -d evals/results ] || fail "No results folder."
+          [ -n "$KEY" ] || fail "Missing key for leak check."
+          [ -d evals/results ] && [ ! -L evals/results ] || fail "No regular results folder."
+          symlinks=$(find evals/results -type l -print -quit)
+          [ -z "$symlinks" ] || fail "Symbolic links found in results."
+          rm -rf "$STAGE"
+          mkdir -p "$STAGE"
+          for name in results.json summary.md; do
+            src="evals/results/$name"
+            [ -f "$src" ] && [ ! -L "$src" ] || fail "Missing regular file: $name."
+            cp -P -- "$src" "$STAGE/$name"
+          done
           set +e
-          grep -rqF -- "$KEY" evals/results; exact=$?
-          grep -rqE -- 'gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{40,}|sk-ant-[A-Za-z0-9_-]{20,}' evals/results; shaped=$?
+          grep -rqF -- "$KEY" "$STAGE"; exact=$?
+          grep -rqE -- 'gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{40,}|sk-ant-[A-Za-z0-9_-]{20,}' "$STAGE"; shaped=$?
           set -e
           [ "$exact" -eq 1 ] || fail "The ANTHROPIC_API_KEY key, or a read error, was found in the results."
           [ "$shaped" -eq 1 ] || fail "A token-shaped string, or a read error, was found in the results."
-      - name: Upload results and transcripts
+          if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then cat "$STAGE/summary.md" >> "$GITHUB_STEP_SUMMARY"; fi
+      - name: Upload results
         if: ${{ !cancelled() && steps.leak.outcome == 'success' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: eval-results-claude-code
-          path: evals/results/
+          path: ${{ runner.temp }}/eval-upload/
           retention-days: 7
