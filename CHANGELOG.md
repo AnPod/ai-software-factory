@@ -7,6 +7,7 @@ All notable changes to AI Werk Skills are recorded here.
 ### Fixed
 
 - Skills run the brain checker by its path (`<skills folder>/aiwerk-refresh/scripts/brain_status.py`, which is executable), with `python3` in front only as a fallback. Copilot CLI matches `python3` by command name only, so the evals and recipes can now allow exactly this script while every other `python3` call stays denied. Before, the denied checker meant agents could not catch a page missing from `index.md`.
+- Evals install the skills as copies inside the sample project instead of links to this repository, so Copilot CLI can run the checker without access to paths outside the project, and agents cannot reach the repository's own skill files.
 
 ### Changed
 

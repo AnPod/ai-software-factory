@@ -293,7 +293,11 @@ def make_project(workdir, harness):
     # Installed skills are not part of the project under test.
     with open(os.path.join(project, ".git", "info", "exclude"), "a", encoding="utf-8") as fh:
         fh.write("\n.claude/\n.agents/\n")
-    r = sh([os.path.join(ROOT, "install.sh"), "--project", project, "--harness", SKILL_FOLDERS[harness], "--apply"], ROOT)
+    # Copies, not links: the skills then live inside the project like in the CI recipes, agents
+    # can run the brain checker without access to paths outside the project, and nothing an
+    # agent does can reach this repository's own skill files.
+    r = sh([os.path.join(ROOT, "install.sh"), "--project", project, "--harness", SKILL_FOLDERS[harness],
+            "--copy", "--apply"], ROOT)
     if r.returncode != 0:
         raise RuntimeError("install.sh failed: " + r.stderr)
     return project
