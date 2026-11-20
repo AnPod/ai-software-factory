@@ -29,12 +29,34 @@ Other harnesses: `--harness copilot,opencode,cursor,gemini,droid` or `--harness 
 
 ## How it works
 
-```
- install ─▶ aiwerk-init ─▶ aiwerk-landscape ─▶ aiwerk-survey ─▶ stage skills ─▶ health
-             interview      tools + consent     first full read   01 … 05
-                 │                │                   │                │
-                 └────────────────┴──────── .aiwerk/brain/ ◀───────────┘
-                                  timestamped Markdown pages, read first, written back
+```mermaid
+flowchart LR
+    subgraph Setup ["One-time setup"]
+        direction TB
+        S0["install.sh --apply"] --> S1["aiwerk-init\nrules and brain"]
+        S1 --> S2["aiwerk-landscape\ntools and consent"]
+        S2 --> S3["aiwerk-survey\nfirst full read"]
+    end
+
+    subgraph Line ["Day-to-day delivery line"]
+        direction LR
+        D1["01 Intake and context\nreadiness, intake,\nspec, context"]
+        D2["02 Orchestration\nplan, dispatch,\nsandbox"]
+        D3["03 Eval and governance\nreview, test-gate,\nsecurity-gate, policy"]
+        D4["04 Release\nrelease, deploy-check,\ndocs-sync"]
+        D5["05 Operations\nincident, slo,\nincident-to-spec"]
+
+        D1 --> D2 --> D3 --> D4 --> D5
+        D5 -- "resolved bug becomes new spec" --> D1
+    end
+
+    Brain[(".aiwerk/brain/\nshared dated notes\nkept fresh by aiwerk-refresh")]
+    Meta["Meta\naiwerk-health and aiwerk-skill-audit"]
+
+    Setup --> D1
+    Setup -. "writes" .-> Brain
+    Line <--> Brain
+    Meta -. "checks" .-> Brain
 ```
 
 1. **`aiwerk-init`** asks which harnesses you use, where work comes in (Slack, Jira, Confluence, Linear, GitHub), what may trigger an agent, which stages to switch on and how autonomous agents may be.
@@ -91,6 +113,45 @@ The stages follow a five-station delivery line. All 23 skills across setup, stag
 | `aiwerk-slo` | 05 Operations | Summarises SLOs and error budgets | available |
 | `aiwerk-health` | Meta | Stage rollout, brain freshness, connector coverage | available |
 | `aiwerk-skill-audit` | Meta | Scans every installed skill with SkillSpector | available |
+
+## Examples
+
+Every project starts the same way once: run `install.sh --apply`, then ask your agent to run `aiwerk-init`, `aiwerk-landscape` and `aiwerk-survey`. After that, trigger only the skills you need.
+
+### iOS app
+
+You are building a Swift app and want to add Face ID login without breaking existing screens or leaking user data.
+
+- **Start the feature:** Point the agent at a GitHub issue and run `aiwerk-intake`, then `aiwerk-spec`. It checks the brain for your Swift version, navigation setup and auth rules, then writes a clear spec.
+- **Build it:** Run `aiwerk-plan` to split the work into small tasks (UI, Keychain helper, tests). Run `aiwerk-sandbox` so the agent works in a separate git worktree while you stay on your main branch.
+- **Check before merging:** Run `aiwerk-test-gate` (Xcode tests), `aiwerk-review` (checks the diff against the spec) and `aiwerk-policy` (checks that no personal user data gets logged).
+- **Ship it:** Run `aiwerk-release` to draft TestFlight or App Store release notes and the PR summary.
+
+### Web app
+
+You have a frontend and API web app (React, Next.js, etc.) and a customer reports a broken checkout button in Slack.
+
+- **Turn the message into work:** Paste the Slack thread and run `aiwerk-intake`, `aiwerk-spec` and `aiwerk-context` (pulls only the checkout files the agent needs).
+- **Fix and verify:** Let the agent make the fix, then run `aiwerk-test-gate` (unit and browser tests) and `aiwerk-security-gate` (checks for bad packages or unsafe code).
+- **Wrap up after merge:** Run `aiwerk-docs-sync` so the brain and project docs stay in sync with the change.
+
+### Backend, SaaS and microservices
+
+You run several backend services (payments, auth, billing) with Datadog, Sentry, Jira and strict data rules.
+
+- **When something breaks at 2 AM:** Run `aiwerk-incident`. It reads the brain to see who owns the service and how it is wired, then checks the monitoring tools you allowed (Datadog, Sentry, Grafana, PagerDuty) to narrow down the cause.
+- **Prevent a repeat:** Once fixed, run `aiwerk-incident-to-spec` to turn what happened into a spec for a permanent fix.
+- **Roll out safely:** Use `aiwerk-plan` and `aiwerk-dispatch` to run tasks headless across changes, `aiwerk-policy` and `aiwerk-security-gate` to enforce compliance, and `aiwerk-deploy-check` before pushing to production so you have a clear rollback trigger.
+- **Weekly checkup:** Run `aiwerk-slo` to summarise uptime and error budgets and `aiwerk-refresh` to renew stale pages in the brain.
+
+### Raspberry Pi and hardware projects
+
+You are building a home sensor or robot script in Python or C++ on a Raspberry Pi, and you only work on it on weekends.
+
+- **Pick up where you left off:** Because `.aiwerk/brain/` records your GPIO pin layout, OS version and deploy command, you do not have to re-explain your setup each time. Run `aiwerk-refresh` when you swap a sensor or update the Pi.
+- **Add a new sensor:** Run `aiwerk-spec` and `aiwerk-plan` to map out the driver code and pin wiring before editing anything.
+- **Test safely:** Run `aiwerk-review` and `aiwerk-test-gate` (with mocked hardware tests on your laptop) before copying code to the Pi.
+- **Deploy cleanly:** Run `aiwerk-deploy-check` to double-check systemd service restarts and a quick rollback path if the Pi hangs.
 
 ## Harness support
 
