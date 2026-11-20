@@ -105,7 +105,7 @@ The stages follow a five-station delivery line. All 23 skills across setup, stag
 | Gemini CLI | `.gemini/skills` | `gemini -p` |
 | Factory Droid | `.factory/skills` | `droid exec` |
 
-Claude Code and GitHub Copilot CLI are tested end to end in CI. The others read the same `SKILL.md` format; reports from users are welcome.
+GitHub Copilot CLI runs the agent evals in CI. Claude Code uses the same eval harness, but this repository's CI has no Anthropic key yet, so Claude Code evals run locally (see [Tests](#tests)). The others read the same `SKILL.md` format; reports from users are welcome.
 
 ### Installing per harness
 
@@ -130,11 +130,13 @@ See [recipes/github-actions/](recipes/github-actions/README.md) for two copy-and
 
 Skills run with your agent's permissions, so they deserve the same scrutiny as code. What this repository does about it:
 
-- **Scanned.** Every pull request, every push to `main` and every release is scanned with [NVIDIA SkillSpector](https://github.com/NVIDIA/skillspector), static analysis for prompt injection, data exfiltration, credential access and other risky patterns. The report is attached to every run and release. A clean scan lowers risk; it does not prove a skill is safe, so read what you install.
-- **Readable.** Skills are Markdown. The only script is a read-only Python checker (`aiwerk-refresh/scripts/brain_status.py`): standard library, no network, writes nothing.
+- **Scanned.** Every pull request, every push to `main` and every release is scanned with [NVIDIA SkillSpector](https://github.com/NVIDIA/skillspector), static analysis for prompt injection, data exfiltration, credential access and other risky patterns. The report is attached to every run and release, and findings appear under **Security > Code scanning**. A clean scan lowers risk; it does not prove a skill is safe, so read what you install.
+- **Readable.** Skills are Markdown. The only script inside the skills is a read-only Python checker (`aiwerk-refresh/scripts/brain_status.py`): standard library, no network, writes nothing.
 - **Asks first.** Skills never install, connect or authenticate tools. `aiwerk-landscape` records your consent per source, and other skills only use what you allowed.
-- **No secrets in the brain.** Skills record where knowledge came from, never tokens or keys. `brain_status.py` flags anything that looks like a credential.
-- **Contained installer.** `install.sh` is a dry run unless you pass `--apply`, makes no network calls, only creates links or copies in skill folders, and never overwrites a folder it did not create.
+- **No secrets in the brain.** Skills record where knowledge came from, never tokens or keys. `brain_status.py` flags anything that looks like a credential, does not follow symbolic links, and never prints the match.
+- **Contained installer.** `install.sh` is a dry run unless you pass `--apply`, makes no network calls, only creates links or copies in skill folders, never overwrites a folder it did not create, and refuses to write through a symbolic link inside the project.
+- **Untrusted text stays data.** Every skill treats brain pages, repository files, tickets and tool output as data, never as instructions, and runs project commands only when the project's own files define them.
+- **Locked-down CI.** Workflows use read-only tokens, keep no git credentials, and pin every action to a commit. `main` accepts changes only through pull requests with passing checks.
 
 Found a problem? See [SECURITY.md](SECURITY.md).
 
@@ -144,9 +146,9 @@ Three layers, all in GitHub Actions:
 
 | Workflow | What it checks | When |
 |---|---|---|
-| **CI** | Skill format (name, description, links, risky shell patterns), brain template, unit tests for the checker and the eval runner, installer end to end on Linux and macOS, ShellCheck | every push and PR |
-| **SkillSpector scan** | Static security scan of all skills, SARIF and JSON reports | every push and PR, weekly, every release |
-| **Agent evals** | Runs GitHub Copilot CLI and Claude Code with the skills on a sample project and checks what they wrote: required pages, valid frontmatter, nothing written outside `.aiwerk/`, no secrets copied from MCP config, report-only mode changes nothing | weekly, on demand, and on PRs that change skills |
+| **CI** | Skill format (name, description, links, risky shell patterns, the untrusted-data rule), brain template, unit tests for the checker and the eval runner, installer end to end on Linux and macOS, ShellCheck | every push and PR |
+| **SkillSpector scan** | Static security scan of all skills, JSON and Markdown reports, SARIF in code scanning | every push and PR, weekly, every release |
+| **Agent evals** | Runs GitHub Copilot CLI (and Claude Code when an Anthropic key is set) with the skills on a sample project and checks what they wrote: required pages, valid frontmatter, nothing written outside `.aiwerk/`, no secrets copied from MCP config, report-only mode changes nothing | weekly, on demand, and on PRs that change skills |
 
 Run locally:
 

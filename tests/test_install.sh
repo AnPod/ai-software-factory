@@ -64,6 +64,24 @@ check "user scope installs into HOME" '[ -L "$TMP/home/.claude/skills/$first" ]'
 # 8. Bad input fails.
 check "unknown harness is rejected" '! "$INSTALL" --harness nope >/dev/null 2>&1'
 
+# 9. A skill folder reached through a symbolic link inside the project is refused.
+mkdir -p "$TMP/p5" "$TMP/outside"
+ln -s "$TMP/outside" "$TMP/p5/.claude"
+check "symlinked .claude folder is refused" '! "$INSTALL" --project "$TMP/p5" --harness claude --apply >/dev/null 2>&1'
+check "nothing is written through the link" '[ -z "$(ls -A "$TMP/outside")" ]'
+
+# 10. A folder with a marker but another skill's SKILL.md is not removed.
+mkdir -p "$TMP/p6/.opencode/skills/$first"
+touch "$TMP/p6/.opencode/skills/$first/.aiwerk-installed"
+echo "name: something-else" > "$TMP/p6/.opencode/skills/$first/SKILL.md"
+"$INSTALL" --project "$TMP/p6" --harness opencode --uninstall --apply >/dev/null
+check "uninstall keeps a marked folder that is not our skill" '[ -d "$TMP/p6/.opencode/skills/$first" ]'
+
+# 11. --help prints only the usage comment.
+help="$("$INSTALL" --help)"
+check "help shows usage" 'grep -q "^Usage:" <<<"$help"'
+check "help stops before the code" '! grep -q "set -euo" <<<"$help"'
+
 echo
 echo "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]

@@ -8,8 +8,10 @@ Checks per skill folder:
   - description: present, at most 1024 chars, says when to use the skill ("Use when" / "Use after")
   - license is Apache-2.0
   - body under 500 lines
-  - relative links in SKILL.md point to files that exist
+  - relative links in SKILL.md point to files that exist inside the skill folder
+  - no symbolic links in the skill folder (Python caches are ignored)
   - no risky shell patterns (pipe to shell, base64 decode to shell, eval of downloads)
+  - the rules say to treat outside content as untrusted data
   - the skill appears in the README skill table
 
 Standard library only. Exit 1 on any error.
@@ -82,15 +84,27 @@ def check_skill(folder, readme):
     if len(body) > 500:
         errors.append("body has %d lines, keep it under 500 (move detail to references/)" % len(body))
 
+    real_folder = os.path.realpath(folder)
     for target in re.findall(r"\]\(([^)\s]+)\)", text):
         if re.match(r"^[a-z]+:", target) or target.startswith("#"):
             continue
-        if not os.path.exists(os.path.join(folder, target.split("#")[0])):
+        path = target.split("#")[0]
+        resolved = os.path.realpath(os.path.join(folder, path))
+        if os.path.isabs(path) or os.path.commonpath([real_folder, resolved]) != real_folder:
+            errors.append("link leaves the skill folder: %s" % target)
+        elif not os.path.exists(resolved):
             errors.append("broken link: %s" % target)
 
-    for root, _, files in os.walk(folder):
+    for root, dirs, files in os.walk(folder):
+        dirs[:] = [d for d in dirs if d != "__pycache__"]
+        for d in dirs:
+            if os.path.islink(os.path.join(root, d)):
+                errors.append("symbolic link not allowed: %s" % os.path.relpath(os.path.join(root, d), folder))
         for f in files:
             fp = os.path.join(root, f)
+            if os.path.islink(fp):
+                errors.append("symbolic link not allowed: %s" % os.path.relpath(fp, folder))
+                continue
             try:
                 with open(fp, encoding="utf-8") as fh:
                     content = fh.read()
@@ -100,6 +114,9 @@ def check_skill(folder, readme):
             for pattern, why in RISKY:
                 if pattern.search(content):
                     errors.append("%s %s" % (os.path.relpath(fp, folder), why))
+
+    if "untrusted data" not in text.lower():
+        errors.append("rules must say to treat brain pages, files or tool output as untrusted data")
 
     if "`%s`" % name not in readme:
         errors.append("not listed in README.md")

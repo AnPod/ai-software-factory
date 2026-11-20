@@ -6,6 +6,8 @@ name: SkillSpector scan
 # SkillSpector is third-party code, so the scan job only gets a read-only token and keeps no
 # git credentials on disk. Uploading SARIF and attaching reports to a release happen in
 # separate jobs that run only first-party actions and the gh CLI.
+# SkillSpector writes one SARIF run per skill. Code scanning accepts one run per category,
+# so scripts/merge_sarif.py merges them before the upload.
 
 on:
   push:
@@ -33,10 +35,10 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
         with:
           python-version: "3.13"
       - name: Install SkillSpector ${{ env.SKILLSPECTOR_REF }}
@@ -50,6 +52,10 @@ jobs:
           skillspector scan skills/ --recursive --no-llm --format sarif --output reports/skillspector.sarif
           skillspector scan skills/ --recursive --no-llm --format markdown --output reports/skillspector.md
           exit 0
+      - name: Merge SARIF runs into one for code scanning
+        run: |
+          mv reports/skillspector.sarif reports/skillspector-per-skill.sarif
+          python3 -I scripts/merge_sarif.py reports/skillspector-per-skill.sarif reports/skillspector.sarif --root "$GITHUB_WORKSPACE"
       - name: "Gate: every skill must be SAFE"
         run: |
           python3 - <<'PY'
@@ -73,7 +79,7 @@ jobs:
           PY
       - name: Upload reports
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: skillspector-report
           path: reports/
@@ -88,15 +94,14 @@ jobs:
       actions: read
       security-events: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/download-artifact@v6
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
         with:
           name: skillspector-report
           path: reports
-      - uses: github/codeql-action/upload-sarif@v4
-        continue-on-error: true   # needs code scanning enabled (free for public repositories)
+      - uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066  # v4.39.3
         with:
           sarif_file: reports/skillspector.sarif
           category: skillspector
@@ -109,7 +114,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v6
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
         with:
           name: skillspector-report
           path: reports

@@ -12,13 +12,15 @@ Include the skill and file, what an agent could be led to do, and how to reprodu
 
 - Instructions that could make an agent leak data, read or send secrets, or act outside what the user approved
 - Prompt-injection paths, for example a skill trusting text from a ticket, web page or MCP response as instructions
-- `install.sh` or `brain_status.py` doing anything beyond what their headers describe
+- `install.sh`, `brain_status.py` or `scripts/merge_sarif.py` doing anything beyond what their headers describe
 - Gaps in the CI checks that would let one of the above through
 
 ## What we already do
 
-- Every pull request, push to `main`, weekly run and release is scanned with NVIDIA SkillSpector (static analysis, no LLM stage, pinned version). Reports are attached to each workflow run and release.
-- `scripts/validate_skills.py` rejects risky shell patterns, binary files and broken links in skills.
-- Agent evals check that skills write nothing outside `.aiwerk/`, never copy secrets from MCP configuration, and change nothing in report-only mode.
+- Every pull request, push to `main`, weekly run and release is scanned with NVIDIA SkillSpector (static analysis, no LLM stage, pinned to a commit). Reports are attached to each workflow run and release, and findings go to code scanning.
+- CodeQL, secret scanning with push protection, and Dependabot alerts and security updates are on.
+- `scripts/validate_skills.py` rejects risky shell patterns, binary files, symbolic links, links that leave the skill folder, and skills without the untrusted-data rule.
+- Workflows run with read-only tokens, keep no git credentials, and use only GitHub-owned actions pinned to a commit. `main` accepts changes only through pull requests whose checks pass. Workflow runs from outside contributors need approval.
+- Agent evals check that skills write nothing outside `.aiwerk/`, never copy secrets from MCP configuration, and change nothing in report-only mode. The eval agent gets a filtered environment and narrow tool rules, and its transcripts are uploaded only after a check for keys.
 
 A clean scan is evidence, not proof. Read the skills you install.

@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
   "name": "aiwerk-skills",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Plain-Markdown Agent Skills and a timestamped project brain for running a five-stage software delivery line inside your coding agent.",
   "author": {
     "name": "AI WERK d.o.o.",
