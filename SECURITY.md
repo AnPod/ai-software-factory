@@ -17,10 +17,10 @@ Include the skill and file, what an agent could be led to do, and how to reprodu
 
 ## What we already do
 
-- Every pull request, push to `main`, weekly run and release is scanned with NVIDIA SkillSpector (static analysis, no LLM stage, pinned to a commit). Reports are attached to each workflow run and release, and findings go to code scanning.
+- Every pull request, push to `main`, weekly run and release is scanned with NVIDIA SkillSpector (static analysis, no LLM stage, pinned to a commit). Reports are attached to each workflow run and release, and non-PR runs upload findings to code scanning.
 - CodeQL, secret scanning with push protection, and Dependabot alerts and security updates are on.
 - `scripts/validate_skills.py` rejects risky shell patterns, binary files, symbolic links, links that leave the skill folder, and skills without the untrusted-data rule.
-- Workflows run with read-only tokens, keep no git credentials, and use only GitHub-owned actions pinned to a commit. `main` accepts changes only through pull requests whose checks pass. Workflow runs from outside contributors need approval.
-- Agent evals check that skills write nothing outside `.aiwerk/`, never copy secrets from MCP configuration, and change nothing in report-only mode. The eval agent gets a filtered environment and narrow tool rules, and its transcripts are uploaded only after a check for keys.
+- Workflows default to read-only tokens, keep no git credentials, and use only GitHub-owned actions pinned to a commit. Narrow write permissions are granted only to separate post-scan jobs in `skillspector.yml` (`security-events: write` for non-PR SARIF uploads, and `contents: write` to attach reports to published releases). `main` accepts changes only through pull requests whose checks pass. Workflow runs from outside contributors need approval.
+- Agent evals check that skills write nothing outside `.aiwerk/`, never copy secrets from MCP configuration, and change nothing in report-only mode. The eval agent gets a filtered environment and narrow tool rules. Raw transcripts stay on the runner; CI stages and uploads only `results.json` and `summary.md` after symlink and key checks pass.
 
 A clean scan is evidence, not proof. Read the skills you install.
