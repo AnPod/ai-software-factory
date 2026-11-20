@@ -82,7 +82,14 @@ confidence: medium
 ---
 ```
 
-When a skill needs a page older than its `ttl_days`, it tells you its age and asks whether to refresh it. `aiwerk-refresh` checks the whole brain at once. The idea follows Andrej Karpathy's LLM Wiki pattern: a maintained knowledge base instead of re-discovering the project on every task.
+The brain never updates itself silently in the background. It stays current in four ways:
+
+- **During normal work:** Every skill reads the brain first, writes what it learns back, updates `index.md` and appends a line to `log.md`.
+- **After a merge:** `aiwerk-docs-sync` checks the git diff, updates brain pages made stale by the change and marks unchanged ones as verified.
+- **When pages expire:** If a skill needs a page older than its `ttl_days`, it tells you its age and asks whether to refresh it or use it as is. `aiwerk-refresh` checks the whole brain at once and re-gathers only the pages you approve.
+- **By hand:** Pages are plain Markdown in your repository, so you can edit them directly. Anything under a `## Human notes` heading is off-limits to skills and will never be overwritten.
+
+The idea follows Andrej Karpathy's LLM Wiki pattern: a maintained knowledge base instead of re-discovering the project on every task.
 
 ## Skills
 
