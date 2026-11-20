@@ -2,6 +2,12 @@
 
 All notable changes to AI Werk Skills are recorded here.
 
+## [Unreleased]
+
+### Changed
+
+- Recipes pin `AIWERK_REF` to the v0.5.0 commit, so they install the hardened skills.
+
 ## [0.5.0] - 2026-11-20
 
 ### Security
