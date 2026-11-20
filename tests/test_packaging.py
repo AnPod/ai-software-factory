@@ -156,6 +156,18 @@ class PackagingTest(unittest.TestCase):
                     if action in used:
                         self.assertIn(sha, used[action], "%s: %s differs from the workflows" % (os.path.basename(path), action))
 
+    def test_skills_run_the_brain_checker_by_path(self):
+        # Copilot CLI matches python3 by name only, so agents get a rule for this exact script path.
+        script = os.path.join(ROOT, "skills", "aiwerk-refresh", "scripts", "brain_status.py")
+        self.assertTrue(os.access(script, os.X_OK), "brain_status.py must stay executable")
+        with open(script, encoding="utf-8") as fh:
+            self.assertEqual(fh.readline().strip(), "#!/usr/bin/env python3")
+        skills = os.path.join(ROOT, "skills")
+        for name in sorted(os.listdir(skills)):
+            with open(os.path.join(skills, name, "SKILL.md"), encoding="utf-8") as fh:
+                text = fh.read()
+            self.assertNotRegex(text, r"(?m)^python3 <", name + " should run brain_status.py by its path")
+
 
 if __name__ == "__main__":
     unittest.main()
