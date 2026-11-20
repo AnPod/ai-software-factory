@@ -2,6 +2,12 @@
 
 All notable changes to AI Werk Skills are recorded here.
 
+## [Unreleased]
+
+### Changed
+
+- Recipes pin `AIWERK_REF` to the v0.5.1 commit, so agents in CI can run the brain checker.
+
 ## [0.5.1] - 2026-11-20
 
 ### Fixed
