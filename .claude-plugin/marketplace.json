@@ -17,8 +17,8 @@
       },
       "source": "./",
       "category": "development",
-      "homepage": "https://github.com/AnPod/softwarefactory",
-      "repository": "https://github.com/AnPod/softwarefactory",
+      "homepage": "https://github.com/AnPod/ai-software-factory",
+      "repository": "https://github.com/AnPod/ai-software-factory",
       "license": "Apache-2.0"
     }
   ]

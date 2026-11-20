@@ -26,7 +26,8 @@ New skills need a row in the README skill table and, when they write to the brai
 
 Tool versions are pinned in the workflow files:
 
-- `.github/workflows/skillspector.yml`: `SKILLSPECTOR_REF` (currently `v2.13.6`)
+- `.github/workflows/skillspector.yml`: `SKILLSPECTOR_REF` (currently `v2.13.6`) and `SKILLSPECTOR_SHA`, the commit that tag points to. Update both together: `git ls-remote https://github.com/NVIDIA/skillspector.git refs/tags/<tag>` prints the commit.
+- `recipes/github-actions/*.yml`: `AIWERK_REF`, the full commit SHA of the latest release of this repository.
 - `.github/workflows/evals.yml`: `COPILOT_CLI_VERSION` (currently `1.0.105`), `CLAUDE_CODE_VERSION` (currently `2.1.328`) and `PYTEST_VERSION` (currently `8.3.5`)
 
 When bumping a version pin, pick a release that is at least two weeks old so supply-chain issues have time to surface.

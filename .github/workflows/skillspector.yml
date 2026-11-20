@@ -2,6 +2,10 @@ name: SkillSpector scan
 
 # Static security scan of every skill with NVIDIA SkillSpector.
 # The gate fails unless every skill is rated SAFE and the scan is complete.
+#
+# SkillSpector is third-party code, so the scan job only gets a read-only token and keeps no
+# git credentials on disk. Uploading SARIF and attaching reports to a release happen in
+# separate jobs that run only first-party actions and the gh CLI.
 
 on:
   push:
@@ -18,21 +22,25 @@ permissions:
 
 env:
   SKILLSPECTOR_REF: v2.13.6
+  # Commit of the tag above. Install from the commit so a moved tag cannot change what runs.
+  SKILLSPECTOR_SHA: e2674da339b0bddc6e565d059c0577c6d9cd25da
   PYTHONDONTWRITEBYTECODE: "1"
 
 jobs:
   scan:
+    name: Scan
     runs-on: ubuntu-latest
     permissions:
-      contents: write          # attach the report to releases
-      security-events: write   # upload SARIF to code scanning
+      contents: read
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
       - name: Install SkillSpector ${{ env.SKILLSPECTOR_REF }}
-        run: pipx install --python python3.13 "git+https://github.com/NVIDIA/skillspector.git@${SKILLSPECTOR_REF}"
+        run: pipx install --python python3.13 "git+https://github.com/NVIDIA/skillspector.git@${SKILLSPECTOR_SHA}"
       - name: Scan (static analysis, no LLM)
         run: |
           mkdir -p reports
@@ -69,15 +77,44 @@ jobs:
         with:
           name: skillspector-report
           path: reports/
-      - name: Upload SARIF to code scanning
-        if: always() && github.event_name != 'pull_request'
-        continue-on-error: true   # needs code scanning enabled (free for public repositories)
-        uses: github/codeql-action/upload-sarif@v4
+
+  sarif:
+    name: Upload SARIF to code scanning
+    needs: scan
+    if: ${{ !cancelled() && github.event_name != 'pull_request' }}
+    runs-on: ubuntu-latest
+    continue-on-error: true   # needs code scanning enabled (free for public repositories)
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v6
+        with:
+          name: skillspector-report
+          path: reports
+      - uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: reports/skillspector.sarif
           category: skillspector
-      - name: Attach report to the release
-        if: github.event_name == 'release'
+
+  release-assets:
+    name: Attach report to the release
+    needs: scan
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v6
+        with:
+          name: skillspector-report
+          path: reports
+      - name: Upload report files
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ github.event.release.tag_name }}" reports/skillspector.json reports/skillspector.md --clobber
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$RELEASE_TAG" reports/skillspector.json reports/skillspector.md --clobber --repo "$GITHUB_REPOSITORY"

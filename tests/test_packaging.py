@@ -62,6 +62,51 @@ class PackagingTest(unittest.TestCase):
         self.assertIn("pull_request:", pr_wf)
         self.assertIn("head.repo.full_name == github.repository", pr_wf)
 
+    def test_recipes_limit_what_the_agent_can_do(self):
+        recipes_dir = os.path.join(ROOT, "recipes", "github-actions")
+        for name in ("issue-intake-and-spec.yml", "pr-governance-gates.yml"):
+            with open(os.path.join(recipes_dir, name), encoding="utf-8") as fh:
+                text = fh.read()
+            # No allow rule for interpreters, project code or blanket git.
+            self.assertNotRegex(
+                text,
+                r"(--allow-tool=shell|\"Bash)\((python3?|node|git|command|find|cp|cat|head|pytest|make)(:\*)?\)",
+                name + " allows a command that can run arbitrary code",
+            )
+            self.assertNotIn("Bash(python3:*)", text)
+            # Every checkout keeps no credentials on disk.
+            self.assertEqual(
+                text.count("uses: actions/checkout@"), text.count("persist-credentials: false"), name
+            )
+            # Secrets only appear as step env values, never in an if: condition.
+            for line in text.splitlines():
+                if "secrets." in line:
+                    self.assertRegex(line, r"^\s+[A-Z_]+: \$\{\{ secrets\.[A-Z_]+( != '')? \}\}$", name + ": " + line)
+            self.assertIn("needs: gate", text)
+            self.assertRegex(text, r'AIWERK_REF: "[0-9a-f]{40}"', name + " should pin AIWERK_REF to a commit")
+            self.assertIn('grep -rqF -- "$KEY" .aiwerk/', text)
+
+        with open(os.path.join(recipes_dir, "issue-intake-and-spec.yml"), encoding="utf-8") as fh:
+            issue_wf = fh.read()
+        self.assertIn("github.event.issue.author_association", issue_wf)
+
+        with open(os.path.join(recipes_dir, "pr-governance-gates.yml"), encoding="utf-8") as fh:
+            pr_wf = fh.read()
+        checks_job = pr_wf.split("\n  checks:\n", 1)[1].split("\n  copilot:\n", 1)[0]
+        self.assertIn("TEST_COMMAND", checks_job)
+        self.assertNotIn("secrets.", checks_job)
+
+    def test_skillspector_scan_has_no_write_token(self):
+        with open(os.path.join(ROOT, ".github", "workflows", "skillspector.yml"), encoding="utf-8") as fh:
+            text = fh.read()
+        scan_job = text.split("\n  scan:\n", 1)[1].split("\n  sarif:\n", 1)[0]
+        self.assertNotRegex(scan_job, r"^\s+[a-z-]+: write\b", "the scan job must not get a write permission")
+        self.assertRegex(text, r"(?m)^permissions:\n  contents: read$")
+        self.assertIn("persist-credentials: false", scan_job)
+        self.assertRegex(text, r"SKILLSPECTOR_SHA: [0-9a-f]{40}")
+        self.assertIn("skillspector.git@${SKILLSPECTOR_SHA}", scan_job)
+        self.assertNotRegex(text, r"run:.*\$\{\{")
+
 
 if __name__ == "__main__":
     unittest.main()

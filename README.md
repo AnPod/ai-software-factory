@@ -2,9 +2,9 @@
 
 **Set up a software factory inside the coding agent you already use.**
 
-[![CI](https://github.com/AnPod/softwarefactory/actions/workflows/ci.yml/badge.svg)](https://github.com/AnPod/softwarefactory/actions/workflows/ci.yml)
-[![SkillSpector scan](https://github.com/AnPod/softwarefactory/actions/workflows/skillspector.yml/badge.svg)](https://github.com/AnPod/softwarefactory/actions/workflows/skillspector.yml)
-[![Agent evals](https://github.com/AnPod/softwarefactory/actions/workflows/evals.yml/badge.svg)](https://github.com/AnPod/softwarefactory/actions/workflows/evals.yml)
+[![CI](https://github.com/AnPod/ai-software-factory/actions/workflows/ci.yml/badge.svg)](https://github.com/AnPod/ai-software-factory/actions/workflows/ci.yml)
+[![SkillSpector scan](https://github.com/AnPod/ai-software-factory/actions/workflows/skillspector.yml/badge.svg)](https://github.com/AnPod/ai-software-factory/actions/workflows/skillspector.yml)
+[![Agent evals](https://github.com/AnPod/ai-software-factory/actions/workflows/evals.yml/badge.svg)](https://github.com/AnPod/ai-software-factory/actions/workflows/evals.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Agent Skills standard](https://img.shields.io/badge/format-Agent%20Skills-black.svg)](https://agentskills.io)
 
@@ -15,7 +15,7 @@ No server, no database, no account. Clone it, link the skills, ask your agent to
 ## Quick start
 
 ```bash
-git clone https://github.com/AnPod/softwarefactory.git ~/aiwerk-skills
+git clone https://github.com/AnPod/ai-software-factory.git ~/aiwerk-skills
 cd your-project
 ~/aiwerk-skills/install.sh            # dry run: shows what it would link
 ~/aiwerk-skills/install.sh --apply    # links the skills into .claude/skills and .agents/skills
@@ -111,7 +111,7 @@ Claude Code and GitHub Copilot CLI are tested end to end in CI. The others read 
 
 - **Claude Code (plugin marketplace):** add this repository as a marketplace and install the plugin directly from Claude Code:
   ```text
-  /plugin marketplace add AnPod/softwarefactory
+  /plugin marketplace add AnPod/ai-software-factory
   /plugin install aiwerk-skills@aiwerk-skills
   ```
   Or install from a local clone with `~/aiwerk-skills/install.sh --harness claude --apply`.

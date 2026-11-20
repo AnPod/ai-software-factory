@@ -2,6 +2,17 @@
 
 All notable changes to AI Werk Skills are recorded here.
 
+## [Unreleased]
+
+### Security
+
+- `skillspector.yml`: the scan job now has a read-only token and keeps no git credentials on disk. SARIF upload and release attachment run in separate jobs with only the permissions they need. SkillSpector is installed from the commit of its pinned tag, and the release tag reaches the shell through an environment variable.
+- GitHub Actions recipes: secrets are checked in a gate job (GitHub rejects `secrets` in a job's `if:`). Agents no longer get `python3`, `find`, `cp`, `cat` or blanket `git` rules, skill files and git config are read-only for them, checkouts keep no credentials, and output is searched for the API key before upload. `pr-governance-gates.yml` runs tests and lint in a separate job without keys. `issue-intake-and-spec.yml` runs automatically only for issues from the owner, members or collaborators, fetches the issue with `gh` (so manual dispatch works), removes hidden HTML comments and validates dispatch inputs.
+
+### Changed
+
+- The repository moved to `AnPod/ai-software-factory`. Recipes pin `AIWERK_REF` to a commit SHA.
+
 ## [0.4.0] - 2026-11-19
 
 ### Added
