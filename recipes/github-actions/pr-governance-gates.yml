@@ -177,6 +177,8 @@ jobs:
             "--allow-tool=shell(git rev-parse)" \
             "--allow-tool=shell(git branch)" \
             "--allow-tool=shell(git ls-files)" \
+            "--allow-tool=shell(.agents/skills/aiwerk-refresh/scripts/brain_status.py:*)" \
+            "--allow-tool=shell(./.agents/skills/aiwerk-refresh/scripts/brain_status.py:*)" \
             "--allow-tool=shell(ls:*)" \
             "--allow-tool=shell(date:*)" \
             "--allow-tool=shell(mkdir:*)" \
@@ -299,6 +301,7 @@ jobs:
             "Bash(git status:*)" "Bash(git log:*)" "Bash(git diff:*)" "Bash(git show:*)" \
             "Bash(git rev-parse:*)" "Bash(git branch --show-current)" "Bash(git ls-files:*)" \
             "Bash(ls:*)" "Bash(date:*)" "Bash(mkdir:*)" "Bash(wc:*)" "Bash(command -v:*)" \
+            "Bash(.claude/skills/aiwerk-refresh/scripts/brain_status.py:*)" \
             "Bash(python3 .claude/skills/aiwerk-refresh/scripts/brain_status.py:*)" \
             --disallowedTools \
             "Edit(.git/**)" "Edit(.github/**)" "Edit(.claude/**)" "Edit(.aiwerk-skills-src/**)" "Read(//proc/**)"

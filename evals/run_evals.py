@@ -46,14 +46,18 @@ CLAUDE_TOOLS = [
     "Bash(git status:*)", "Bash(git log:*)", "Bash(git diff:*)", "Bash(git show:*)", "Bash(git rev-parse:*)",
     "Bash(git branch --show-current)", "Bash(git ls-files:*)", "Bash(git shortlog:*)", "Bash(git tag --sort:*)",
     "Bash(git tag --list:*)", "Bash(ls:*)", "Bash(date:*)", "Bash(mkdir:*)", "Bash(wc:*)", "Bash(command -v:*)",
+    "Bash(.claude/skills/aiwerk-refresh/scripts/brain_status.py:*)",
     "Bash(python3 .claude/skills/aiwerk-refresh/scripts/brain_status.py:*)",
     "Bash(pytest:*)", "Bash(make test)", "Bash(make lint)", "Bash(skillspector:*)",
 ]
 CLAUDE_DENY = ["Edit(.git/**)", "Edit(.claude/**)", "Edit(.agents/**)", "Edit(.github/**)"]
 
 # Copilot CLI denies every tool that no rule allows when it runs non-interactively.
-# Reading files inside the project is allowed by default.
+# Reading files inside the project is allowed by default. Copilot matches python3 by name only,
+# so the brain checker is allowed by its own path (it is executable) while python3 stays denied.
 COPILOT_TOOLS = ["write"] + ["shell(git %s)" % sub for sub in READ_ONLY_GIT] + [
+    "shell(.agents/skills/aiwerk-refresh/scripts/brain_status.py:*)",
+    "shell(./.agents/skills/aiwerk-refresh/scripts/brain_status.py:*)",
     "shell(ls:*)", "shell(date:*)", "shell(mkdir:*)", "shell(wc:*)",
     "shell(pytest:*)", "shell(make test)", "shell(make lint)", "shell(skillspector:*)",
 ]

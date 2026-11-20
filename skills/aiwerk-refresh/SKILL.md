@@ -21,8 +21,10 @@ Keep the brain trustworthy. Knowledge has a date; this skill shows it and renews
 If `python3` is available, run the read-only checker that ships with this skill, from the project root:
 
 ```bash
-python3 <folder of this SKILL.md>/scripts/brain_status.py .aiwerk/brain
+<folder of this SKILL.md>/scripts/brain_status.py .aiwerk/brain
 ```
+
+The script is executable, so run it by its path as shown. If that does not work (for example on Windows), put `python3` in front.
 
 It prints one row per page (age, time to live, status) and a list of problems. It makes no network calls and changes no files. Add `--json` for machine-readable output.
 
