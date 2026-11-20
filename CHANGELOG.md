@@ -2,7 +2,7 @@
 
 All notable changes to AI Werk Skills are recorded here.
 
-## [Unreleased]
+## [0.5.1] - 2026-11-20
 
 ### Fixed
 
