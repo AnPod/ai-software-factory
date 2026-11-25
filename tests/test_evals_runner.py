@@ -1,5 +1,6 @@
 """Self-test for evals/run_evals.py: a fake agent must pass every case, a misbehaving one must fail."""
 
+import importlib.util
 import json
 import os
 import subprocess
@@ -21,13 +22,30 @@ EXPECTED_CASES = {
 }
 
 
-def run(mode, extra_args=(), skillspector_mode="installed"):
+def run(mode, extra_args=(), skillspector_mode="installed", agent_cmd=None, env_extra=None):
     env = dict(os.environ, AIWERK_FAKE_AGENT_MODE=mode, AIWERK_SKILLSPECTOR_MODE=skillspector_mode)
     env.pop("GITHUB_STEP_SUMMARY", None)
-    r = subprocess.run([sys.executable, RUNNER, "--agent-cmd", FAKE] + list(extra_args), cwd=ROOT, env=env,
+    if env_extra:
+        env.update(env_extra)
+    cmd = agent_cmd or FAKE
+    r = subprocess.run([sys.executable, RUNNER, "--agent-cmd", cmd] + list(extra_args), cwd=ROOT, env=env,
                        capture_output=True, text=True, timeout=300)
     with open(os.path.join(ROOT, "evals", "results", "results.json"), encoding="utf-8") as fh:
         return r, json.load(fh)
+
+
+def load_run_evals():
+    spec = importlib.util.spec_from_file_location("run_evals", RUNNER)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+TOKEN_SHAPED = {
+    "ghp": "ghp_" + "A" * 36,
+    "github_pat": "github_pat_" + "B" * 40,
+    "sk_ant": "sk-ant-" + "C" * 24,
+}
 
 
 class EvalRunnerTest(unittest.TestCase):
@@ -74,12 +92,91 @@ class EvalRunnerTest(unittest.TestCase):
         self.assertIn("stops without changing brain when SkillSpector is missing", failed)
 
 
+class DiagnosticSanitizeTest(unittest.TestCase):
+    def setUp(self):
+        self.mod = load_run_evals()
+
+    def test_sanitize_redacts_env_secrets_and_token_shapes(self):
+        copilot = "copilot-secret-" + "x" * 20
+        anthropic = "anthropic-secret-" + "y" * 20
+        msg = (
+            "auth failed copilot=%s anthropic=%s tokens %s %s %s"
+            % (copilot, anthropic, TOKEN_SHAPED["ghp"], TOKEN_SHAPED["github_pat"], TOKEN_SHAPED["sk_ant"])
+        )
+        old = dict(os.environ)
+        try:
+            os.environ["COPILOT_GITHUB_TOKEN"] = copilot
+            os.environ["ANTHROPIC_API_KEY"] = anthropic
+            out = self.mod.sanitize_diagnostic(msg)
+        finally:
+            os.environ.clear()
+            os.environ.update(old)
+        self.assertNotIn(copilot, out)
+        self.assertNotIn(anthropic, out)
+        for tok in TOKEN_SHAPED.values():
+            self.assertNotIn(tok, out)
+        self.assertIn("[redacted]", out)
+        self.assertIn("[redacted-token]", out)
+        self.assertNotIn("\n", out)
+
+    def test_sanitize_bounds_tail(self):
+        long_line = "x" * 400
+        out = self.mod.sanitize_diagnostic(long_line)
+        self.assertLessEqual(len(out), 300)
+        self.assertTrue(out.endswith("x" * 300))
+
+
+class FailedAgentDiagnosticTest(unittest.TestCase):
+    def test_nonzero_agent_reports_sanitized_detail_without_leaks(self):
+        copilot = "copilot-eval-" + "z" * 24
+        anthropic = "anthropic-eval-" + "w" * 24
+        shaped = TOKEN_SHAPED["ghp"]
+        err = "agent boom key=%s also %s token %s\nmore\nlines" % (copilot, anthropic, shaped)
+        agent_cmd = "%s -c \"import sys; sys.stderr.write(%r); sys.exit(1)\"" % (sys.executable, err)
+        env_extra = {
+            "COPILOT_GITHUB_TOKEN": copilot,
+            "ANTHROPIC_API_KEY": anthropic,
+            "AIWERK_FAKE_AGENT_MODE": "",
+        }
+        r, data = run(
+            "good",
+            extra_args=("--cases", "init"),
+            agent_cmd=agent_cmd,
+            env_extra=env_extra,
+        )
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        case = data["results"][0]
+        self.assertFalse(case["passed"])
+        exit_check = case["checks"][0]
+        self.assertEqual(exit_check["check"], "agent exits cleanly")
+        self.assertFalse(exit_check["ok"])
+        self.assertIn("exit 1:", exit_check["detail"])
+        self.assertIn("[redacted]", exit_check["detail"])
+        self.assertIn("[redacted-token]", exit_check["detail"])
+        self.assertIn("agent exits cleanly", r.stdout)
+        self.assertIn("exit 1:", r.stdout)
+
+        results_path = os.path.join(ROOT, "evals", "results", "results.json")
+        summary_path = os.path.join(ROOT, "evals", "results", "summary.md")
+        blob = r.stdout + r.stderr
+        with open(results_path, encoding="utf-8") as fh:
+            blob += fh.read()
+        with open(summary_path, encoding="utf-8") as fh:
+            blob += fh.read()
+        for secret in (copilot, anthropic, shaped):
+            self.assertNotIn(secret, blob)
+
+        with open(
+            os.path.join(ROOT, "evals", "results", "transcripts", "init.txt"), encoding="utf-8"
+        ) as fh:
+            transcript = fh.read()
+        self.assertIn(copilot, transcript)
+        self.assertIn(shaped, transcript)
+
+
 class AgentLimitsTest(unittest.TestCase):
     def setUp(self):
-        import importlib.util
-        spec = importlib.util.spec_from_file_location("run_evals", RUNNER)
-        self.mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(self.mod)
+        self.mod = load_run_evals()
 
     def test_agent_env_drops_secrets_and_runner_files(self):
         fake = {"PATH": "/usr/bin", "HOME": "/home/x", "GITHUB_ENV": "/tmp/env", "GITHUB_OUTPUT": "/tmp/out",
