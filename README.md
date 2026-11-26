@@ -186,6 +186,10 @@ GitHub Copilot CLI runs the agent evals in CI. Claude Code uses the same eval ha
 - **GitHub Copilot CLI:** run `~/aiwerk-skills/install.sh --harness copilot --apply` in your repository (links into `.agents/skills`; Copilot CLI also reads `.github/skills` and `.claude/skills`). Add `--scope user` to install for every project.
 - **OpenAI Codex:** run `~/aiwerk-skills/install.sh --harness codex --apply` (links into `.agents/skills`, or `~/.agents/skills` with `--scope user`).
 - **OpenCode:** run `~/aiwerk-skills/install.sh --harness opencode --apply` (links into `.opencode/skills`, or `${XDG_CONFIG_HOME:-$HOME/.config}/opencode/skills` with `--scope user`; OpenCode also reads `.claude/skills` and `.agents/skills`).
+- **Pi:** run `~/aiwerk-skills/install.sh --harness pi --apply` (alias for `agents`; links into `.agents/skills`, or `~/.agents/skills` with `--scope user`).
+- **Cursor CLI:** run `~/aiwerk-skills/install.sh --harness cursor --apply` (links into `.cursor/skills`, or `~/.cursor/skills` with `--scope user`).
+- **Gemini CLI:** run `~/aiwerk-skills/install.sh --harness gemini --apply` (links into `.gemini/skills`, or `~/.gemini/skills` with `--scope user`).
+- **Factory Droid:** run `~/aiwerk-skills/install.sh --harness droid --apply` (links into `.factory/skills`, or `~/.factory/skills` with `--scope user`).
 
 ### Headless CI recipes
 
