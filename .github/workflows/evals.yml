@@ -7,6 +7,10 @@ name: Agent evals
 #                                             Free, Student, Pro and Business plans)
 #   Claude Code         ANTHROPIC_API_KEY
 # Agent runs cost credits, so this workflow runs weekly, on demand, and when skills or evals change.
+# On pull_request and push, select-cases runs first and picks only changed skill cases (or a 3-case
+# smoke set when runner/fixtures/installer/workflow/selector changes). Weekly schedule and empty
+# workflow_dispatch still run all 23 cases. A CASES key with no skills/aiwerk-<case>/ tree is
+# included only from those full runs or an explicit dispatch list.
 #
 # The agent gets a filtered environment and narrow tool rules (see evals/run_evals.py). Only the
 # structured summary files (results.json and summary.md) are staged and uploaded, and only after
@@ -33,7 +37,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: evals-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -43,8 +47,43 @@ env:
   PYTHONDONTWRITEBYTECODE: "1"
 
 jobs:
+  select-cases:
+    name: Select eval cases
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.select.outputs.run }}
+      cases: ${{ steps.select.outputs.cases }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: select
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.sha }}
+          EXPLICIT_CASES: ${{ inputs.cases }}
+        run: |
+          set -e
+          DEFAULT_BRANCH="${{ github.event.repository.default_branch }}"
+          args=(--event "$EVENT" --explicit-cases "$EXPLICIT_CASES" --default-branch "$DEFAULT_BRANCH")
+          case "$EVENT" in
+            pull_request)
+              args+=(--base-sha "$BASE_SHA" --head-sha "$HEAD_SHA")
+              ;;
+            push)
+              args+=(--before-sha "$BEFORE_SHA" --after-sha "$AFTER_SHA")
+              ;;
+          esac
+          python3 evals/select_eval_cases.py "${args[@]}"
+
   secrets:
     name: Which agents can run
+    needs: select-cases
+    if: needs.select-cases.outputs.run == 'true'
     runs-on: ubuntu-latest
     outputs:
       copilot: ${{ steps.check.outputs.copilot }}
@@ -74,8 +113,8 @@ jobs:
 
   copilot:
     name: GitHub Copilot CLI
-    needs: secrets
-    if: needs.secrets.outputs.copilot == 'true'
+    needs: [select-cases, secrets]
+    if: needs.select-cases.outputs.run == 'true' && needs.secrets.outputs.copilot == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -95,11 +134,10 @@ jobs:
       - name: Run evals
         env:
           COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
-          CASES: ${{ inputs.cases }}
+          CASES: ${{ needs.select-cases.outputs.cases }}
           MODEL: ${{ inputs.model }}
         run: |
-          args=(--harness copilot)
-          if [ -n "$CASES" ]; then args+=(--cases "$CASES"); fi
+          args=(--harness copilot --cases "$CASES")
           if [ -n "$MODEL" ]; then args+=(--model "$MODEL"); fi
           env -u GITHUB_STEP_SUMMARY python3 evals/run_evals.py "${args[@]}"
       - name: Check and stage results
@@ -139,8 +177,8 @@ jobs:
 
   claude-code:
     name: Claude Code
-    needs: secrets
-    if: needs.secrets.outputs.claude == 'true'
+    needs: [select-cases, secrets]
+    if: needs.select-cases.outputs.run == 'true' && needs.secrets.outputs.claude == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -160,11 +198,10 @@ jobs:
       - name: Run evals
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          CASES: ${{ inputs.cases }}
+          CASES: ${{ needs.select-cases.outputs.cases }}
           MODEL: ${{ inputs.model }}
         run: |
-          args=(--harness claude)
-          if [ -n "$CASES" ]; then args+=(--cases "$CASES"); fi
+          args=(--harness claude --cases "$CASES")
           if [ -n "$MODEL" ]; then args+=(--model "$MODEL"); fi
           env -u GITHUB_STEP_SUMMARY python3 evals/run_evals.py "${args[@]}"
       - name: Check and stage results
