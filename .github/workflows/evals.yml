@@ -8,7 +8,9 @@ name: Agent evals
 #   Claude Code         ANTHROPIC_API_KEY
 # Agent runs cost credits, so this workflow runs weekly, on demand, and when skills or evals change.
 # On pull_request and push, select-cases runs first and picks only changed skill cases (or a 3-case
-# smoke set when runner/fixtures/installer/workflow/selector changes). Weekly schedule and empty
+# smoke set when runner/fixtures/installer/workflow/selector, the shared brain template
+# (skills/aiwerk-init/assets/brain/**), or the brain checker
+# (skills/aiwerk-refresh/scripts/brain_status.py) changes). Weekly schedule and empty
 # workflow_dispatch still run all 23 cases. A CASES key with no skills/aiwerk-<case>/ tree is
 # included only from those full runs or an explicit dispatch list.
 #

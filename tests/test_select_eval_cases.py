@@ -51,6 +51,32 @@ class CasesFromChangedFilesTest(unittest.TestCase):
         cases, _, _ = sec.cases_from_changed_files(["evals/select_eval_cases.py"])
         self.assertEqual(cases, SMOKE)
 
+    def test_shared_brain_files_select_smoke_and_union_other_skills(self):
+        for path in (
+            "skills/aiwerk-init/assets/brain/SCHEMA.md",
+            "skills/aiwerk-refresh/scripts/brain_status.py",
+        ):
+            with self.subTest(path=path):
+                cases, mode, _ = sec.cases_from_changed_files([path])
+                self.assertEqual((cases, mode), (SMOKE, "smoke"))
+                cases, mode, _ = sec.cases_from_changed_files([
+                    path, "skills/aiwerk-plan/SKILL.md",
+                ])
+                self.assertEqual((cases, mode), (
+                    ["init", "plan", "review", "skill-audit"], "smoke"
+                ))
+
+    def test_other_init_and_refresh_files_select_only_their_skill(self):
+        for path, expected in (
+            ("skills/aiwerk-init/SKILL.md", "init"),
+            ("skills/aiwerk-init/assets/brainstorm.md", "init"),
+            ("skills/aiwerk-refresh/SKILL.md", "refresh"),
+            ("skills/aiwerk-refresh/scripts/other.py", "refresh"),
+        ):
+            with self.subTest(path=path):
+                cases, mode, _ = sec.cases_from_changed_files([path])
+                self.assertEqual((cases, mode), ([expected], "changed"))
+
     def test_infra_plus_skill_unions(self):
         cases, mode, _ = sec.cases_from_changed_files([
             "evals/run_evals.py",

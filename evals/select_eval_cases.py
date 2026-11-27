@@ -7,9 +7,9 @@ A CASES key with no matching skills/aiwerk-<case>/ directory is never selected f
 change; only schedule, empty workflow_dispatch, or an explicit dispatch list includes it.
 
 Smoke set (init, review, skill-audit) runs when evals/run_evals.py, evals/fixtures/**,
-install.sh, .github/workflows/evals.yml, or this script changes, union any skill cases from
-the same diff. Otherwise a change only to this selector would trigger the workflow via the
-evals/** path filter and then skip all agent runs.
+install.sh, .github/workflows/evals.yml, this script, skills/aiwerk-init/assets/brain/**,
+or skills/aiwerk-refresh/scripts/brain_status.py changes. It also includes any other
+changed skill cases from the same diff.
 
 Usage:
   python3 evals/select_eval_cases.py --event pull_request --base-sha ... --head-sha ...
@@ -38,8 +38,9 @@ INFRA_EXACT = frozenset({
     "install.sh",
     ".github/workflows/evals.yml",
     "evals/select_eval_cases.py",
+    "skills/aiwerk-refresh/scripts/brain_status.py",
 })
-INFRA_PREFIX = ("evals/fixtures/",)
+INFRA_PREFIX = ("evals/fixtures/", "skills/aiwerk-init/assets/brain/")
 
 
 class SelectError(Exception):
