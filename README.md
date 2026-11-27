@@ -25,7 +25,7 @@ Then, in your coding agent:
 
 > Use the aiwerk-init skill to set up the software factory for this project.
 
-Other harnesses: `--harness copilot,opencode,cursor,gemini,droid` or `--harness all`. Install for every project with `--scope user`. Remove with `--uninstall --apply`.
+Other harnesses: `--harness codex,copilot,pi,opencode,cursor,gemini,droid` or `--harness all`. Install for every project with `--scope user`. Remove with `--uninstall --apply`.
 
 ## How it works
 
