@@ -24,6 +24,8 @@ bash tests/test_install.sh
 
 `main` only accepts changes through a pull request with these checks passing: `Skills, brain and unit tests`, `Installer on ubuntu-latest`, `Installer on macos-latest` and the SkillSpector `Scan`.
 
+A pull request that changes files under `skills/` must also change the `## [Unreleased]` section of `CHANGELOG.md` (the `Changelog entry` check, `scripts/check_changelog.py`). Whitespace-only edits do not count. If no entry is needed, a maintainer can add the `no-changelog` label to the pull request. The check is advisory until a maintainer adds `Changelog entry` to the branch protection required checks.
+
 New skills need a row in the README skill table and, when they write to the brain, an eval case in `evals/run_evals.py`.
 
 ## Maintenance
