@@ -3,8 +3,8 @@
 
 Imports CASES from evals.run_evals so the case list cannot drift. On pull_request and push,
 only skills whose tree changed run, plus a small smoke set when suite-wide files change.
-A CASES key with no matching skills/aiwerk-<case>/ directory is never selected from a path
-change; only schedule, empty workflow_dispatch, or an explicit dispatch list includes it.
+Cases normally map to their matching skill directory. Additional cases may map explicitly
+to a skill; a nonexistent or deleted skill directory does not select a case.
 
 Smoke set (init, review, skill-audit) runs when evals/run_evals.py, evals/fixtures/**,
 install.sh, .github/workflows/evals.yml, or this script changes, union any skill cases from
@@ -69,7 +69,7 @@ def skill_case_from_path(path: str) -> str | None:
     if not rest:
         return None
     case = rest.split("/", 1)[0]
-    if case in CASES:
+    if os.path.isdir(os.path.join(ROOT, "skills", "aiwerk-" + case)):
         return case
     return None
 
@@ -91,7 +91,7 @@ def cases_from_changed_files(changed_files: list[str]) -> tuple[list[str], str, 
             continue
         case = skill_case_from_path(line)
         if case:
-            skills.add(case)
+            skills.update(name for name, config in CASES.items() if config.get("skill", name) == case)
     if not skills and not infra:
         return [], "skip", "no skill or infra paths in the diff"
     if infra:

@@ -1,5 +1,6 @@
 """Self-test for evals/run_evals.py: a fake agent must pass every case, a misbehaving one must fail."""
 
+import argparse
 import json
 import os
 import subprocess
@@ -13,7 +14,7 @@ FAKE = "%s %s" % (sys.executable, os.path.join(ROOT, "tests", "fake_agent.py"))
 EXPECTED_CASES = {
     "init", "landscape", "survey", "refresh",
     "readiness", "intake", "spec", "context",
-    "plan", "dispatch", "sandbox",
+    "plan", "dispatch", "sandbox", "sandbox-prepare",
     "review", "test-gate", "security-gate", "policy",
     "release", "deploy-check", "docs-sync",
     "incident", "incident-to-spec", "slo",
@@ -50,6 +51,8 @@ class EvalRunnerTest(unittest.TestCase):
         self.assertIn("records dependency order", failed["plan"])
         self.assertIn("avoids broad permission flags", failed["dispatch"])
         self.assertIn("writes nothing outside .aiwerk/", failed["sandbox"])
+        self.assertIn("creates a worktree outside the repository", failed["sandbox-prepare"])
+        self.assertIn("records prepared status", failed["sandbox-prepare"])
         self.assertIn("assigns a review verdict", failed["review"])
         self.assertIn("writes nothing outside .aiwerk/", failed["test-gate"])
         self.assertIn("does not copy secrets from MCP config", failed["security-gate"])
@@ -104,6 +107,21 @@ class AgentLimitsTest(unittest.TestCase):
         self.assertIn("ANTHROPIC_API_KEY", claude)
         self.assertNotIn("COPILOT_GITHUB_TOKEN", claude)
         self.assertNotIn("ANTHROPIC_API_KEY", custom)
+
+    def test_worktree_permission_is_limited_to_prepare_case(self):
+        for harness in ("claude", "copilot"):
+            args = argparse.Namespace(agent_cmd=None, harness=harness, model=None, max_credits=None)
+            for name in ("dispatch", "sandbox", "sandbox-prepare"):
+                case = self.mod.CASES[name]
+                argv, _ = self.mod.agent_command(args, case["prompt"], case.get("allow_worktree", False))
+                rules = [arg for arg in argv if "git worktree add" in arg]
+                self.assertEqual(len(rules), 1 if name == "sandbox-prepare" else 0)
+
+    def test_prepare_rejects_wrong_outside_directory(self):
+        r, data = run("wrong-directory", extra_args=("--cases", "sandbox-prepare"))
+        self.assertEqual(r.returncode, 1)
+        failed = [c["check"] for c in data["results"][0]["checks"] if not c["ok"]]
+        self.assertIn("creates a worktree outside the repository", failed)
 
     def test_no_interpreter_or_blanket_rules(self):
         allowed = " ".join(self.mod.CLAUDE_TOOLS + self.mod.COPILOT_TOOLS)

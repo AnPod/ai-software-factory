@@ -10,13 +10,14 @@ the checks catch it.
 import datetime as dt
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
 
 case = os.environ.get("AIWERK_EVAL_CASE", "")
 bad = os.environ.get("AIWERK_FAKE_AGENT_MODE") == "bad"
-sys.stdin.read()
+prompt = sys.stdin.read()
 now = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True).stdout.strip()
 branch = subprocess.run(["git", "branch", "--show-current"], capture_output=True, text=True).stdout.strip() or "main"
@@ -147,11 +148,20 @@ elif case == "dispatch":
     body = "## Commands\n\n    git worktree add /tmp/wt-t1 -b aiwerk/gh-12/t1 main\n    %s\n" % cmd
     page("specs/GH-12/dispatch.md", "GH-12 dispatch plan", "spec/dispatch", 7, body)
     add_index(["specs/GH-12/dispatch.md"])
-elif case == "sandbox":
+elif case in ("sandbox", "sandbox-prepare"):
     body = (
         "- Mode: local git worktree\n- Status: planned\n\n"
         "## Setup commands\n\n    git worktree add /tmp/wt-t1 -b aiwerk/gh-12/t1 main\n"
     )
+    if case == "sandbox-prepare":
+        target = prompt.split(" Use this worktree directory: ", 1)[1].rstrip(".\n")
+        if bad:
+            target = "wt"
+        elif os.environ.get("AIWERK_FAKE_AGENT_MODE") == "wrong-directory":
+            target += "-wrong"
+        subprocess.run(["git", "worktree", "add", "-b", "eval-worktree", target, "main"], check=True)
+        body = "- Status: %s\n\n## Setup commands\n\n    git worktree add %s\n" % (
+            "planned" if bad else "prepared", shlex.quote(target))
     page("specs/GH-12/sandbox.md", "GH-12 sandbox plan", "spec/sandbox", 7, body)
     add_index(["specs/GH-12/sandbox.md"])
     if bad:

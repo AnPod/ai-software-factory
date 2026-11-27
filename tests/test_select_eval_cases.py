@@ -23,6 +23,12 @@ class CasesFromChangedFilesTest(unittest.TestCase):
         self.assertEqual(cases, ["review"])
         self.assertEqual(mode, "changed")
 
+    def test_sandbox_change_selects_both_cases(self):
+        cases, _, _ = sec.cases_from_changed_files(["skills/aiwerk-sandbox/SKILL.md"])
+        self.assertEqual(cases, ["sandbox", "sandbox-prepare"])
+        cases, _, _ = sec.cases_from_changed_files(["skills/aiwerk-sandbox-prepare/SKILL.md"])
+        self.assertEqual(cases, [])
+
     def test_two_skills_in_cases_order(self):
         cases, _, _ = sec.cases_from_changed_files([
             "skills/aiwerk-survey/foo.md",

@@ -9,8 +9,8 @@ name: Agent evals
 # Agent runs cost credits, so this workflow runs weekly, on demand, and when skills or evals change.
 # On pull_request and push, select-cases runs first and picks only changed skill cases (or a 3-case
 # smoke set when runner/fixtures/installer/workflow/selector changes). Weekly schedule and empty
-# workflow_dispatch still run all 23 cases. A CASES key with no skills/aiwerk-<case>/ tree is
-# included only from those full runs or an explicit dispatch list.
+# workflow_dispatch still run all 24 cases. Sandbox changes select both sandbox cases. Cases without
+# a matching skill directory are included only in full runs or an explicit dispatch list.
 #
 # The agent gets a filtered environment and narrow tool rules (see evals/run_evals.py). Only the
 # structured summary files (results.json and summary.md) are staged and uploaded, and only after
