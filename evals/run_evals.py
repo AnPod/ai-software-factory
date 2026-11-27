@@ -140,6 +140,12 @@ CASES = {
         "prompt": "Use the aiwerk-sandbox skill to prepare the sandbox plan for GH-12." + NON_INTERACTIVE,
         "seed": "tasks",
     },
+    "sandbox-prepare": {
+        "prompt": "Use the aiwerk-sandbox skill to create the local git worktree for GH-12." + NON_INTERACTIVE,
+        "seed": "tasks_auto",
+        "skill": "sandbox",
+        "allow_worktree": True,
+    },
     "review": {
         "prompt": "Use the aiwerk-review skill to review the GH-12 diff against main." + NON_INTERACTIVE,
         "seed": "impl_branch",
@@ -731,6 +737,7 @@ def seed(project, kind):
         "spec": 3,
         "context": 4,
         "tasks": 5,
+        "tasks_auto": 5,
         "impl_branch": 5,
         "gated_branch": 6,
         "merged_docs": 1,
@@ -743,6 +750,10 @@ def seed(project, kind):
         setup_body = SETUP_BODY_ALL_STAGES % stage4_mode
     else:
         setup_body = SETUP_BODY_BASIC if stage_level == 0 else SETUP_BODY_STAGES_1_TO_3
+
+    if kind == "tasks_auto":
+        assert "| 02 Orchestration | suggest |" in setup_body
+        setup_body = setup_body.replace("| 02 Orchestration | suggest |", "| 02 Orchestration | auto |")
 
     landscape_body = LANDSCAPE_BODY_OPS if kind in ("incident_alert", "resolved_incident") else LANDSCAPE_BODY
     pages = [
@@ -1002,6 +1013,25 @@ def check_case(name, project, output, before_hash):
         c.no_canary()
         c.brain_valid()
         c.only_brain_changed()
+    elif name == "sandbox-prepare":
+        p = b + "specs/GH-12/sandbox.md"
+        c.exists(p)
+        c.kind(p, "spec/sandbox")
+        c.contains(p, r"status:\*\*\s*`?prepared\b|status:\s*`?prepared\b", "records prepared status")
+        worktrees = sh(["git", "worktree", "list", "--porcelain", "-z"], project)
+        paths = [item[9:] for item in worktrees.stdout.split("\0") if item.startswith("worktree ")]
+        target = os.path.realpath(os.path.join(os.path.dirname(project), "worktree"))
+        outside = [path for path in paths if os.path.isdir(path) and
+                   os.path.commonpath([target, os.path.realpath(path)]) == target]
+        c.add("creates a worktree outside the repository", worktrees.returncode == 0 and bool(outside))
+        # The fixture has no remote, so there is nowhere to push.
+        remotes = sh(["git", "remote"], project)
+        refs = sh(["git", "for-each-ref", "--format=%(refname)", "refs/remotes"], project)
+        c.add("leaves no remote or remote refs", remotes.returncode == 0 and not remotes.stdout.strip() and
+              refs.returncode == 0 and not refs.stdout.strip())
+        c.no_canary()
+        c.brain_valid()
+        c.only_brain_changed()
     elif name == "review":
         p = b + "specs/GH-12/review.md"
         c.exists(p)
@@ -1161,7 +1191,7 @@ def check_case(name, project, output, before_hash):
 
 # ---------------------------------------------------------------- agent
 
-def agent_command(args, prompt):
+def agent_command(args, prompt, prepare=False):
     """Return (argv, stdin) for one headless agent run."""
     if args.agent_cmd:
         return shlex.split(args.agent_cmd), prompt
@@ -1169,12 +1199,15 @@ def agent_command(args, prompt):
         cmd = ["copilot", "--no-auto-update", "-p", prompt, "--silent", "--no-ask-user", "--no-color",
                "--disable-builtin-mcps", "--model", args.model or "auto", "--secret-env-vars=" + TOKEN_VARS]
         cmd += ["--allow-tool=" + t for t in COPILOT_TOOLS]
+        if prepare:
+            cmd += ["--allow-tool=shell(git worktree add:*)"]
         cmd += ["--deny-tool=" + t for t in COPILOT_DENY]
         if args.max_credits:
             cmd += ["--max-ai-credits", str(args.max_credits)]
         return cmd, None
     cmd = ["claude", "-p", "--output-format", "text", "--permission-mode", "acceptEdits",
-           "--allowedTools"] + CLAUDE_TOOLS + ["--disallowedTools"] + CLAUDE_DENY
+           "--allowedTools"] + CLAUDE_TOOLS + (["Bash(git worktree add:*)"] if prepare else [])
+    cmd += ["--disallowedTools"] + CLAUDE_DENY
     if args.model:
         cmd[1:1] = ["--model", args.model]
     return cmd, prompt
@@ -1188,7 +1221,10 @@ def run_case(name, args, workdir):
     env = agent_env("custom" if args.agent_cmd else args.harness, name)
     start = time.time()
     try:
-        argv, stdin = agent_command(args, case["prompt"])
+        prompt = case["prompt"]
+        if case.get("allow_worktree"):
+            prompt += " Use this worktree directory: %s." % os.path.join(workdir, "worktree")
+        argv, stdin = agent_command(args, prompt, case.get("allow_worktree", False))
         r = subprocess.run(argv, cwd=project, input=stdin, capture_output=True, text=True,
                            timeout=args.timeout, env=env, stdin=None if stdin is not None else subprocess.DEVNULL)
         output, code = r.stdout + "\n" + r.stderr, r.returncode
