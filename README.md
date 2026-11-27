@@ -162,18 +162,20 @@ You are building a home sensor or robot script in Python or C++ on a Raspberry P
 
 ## Harness support
 
-| Harness | Skill folder | Headless run |
-|---|---|---|
-| Claude Code | `.claude/skills` | `claude -p` |
-| GitHub Copilot CLI | `.agents/skills` (also reads `.github/skills` and `.claude/skills`) | `copilot -p` |
-| OpenAI Codex | `.agents/skills` | `codex exec` |
-| OpenCode | `.opencode/skills` (also reads `.claude` and `.agents`) | `opencode run` |
-| Pi | `.agents/skills` | `pi -p` |
-| Cursor CLI | `.cursor/skills` | `cursor-agent -p` |
-| Gemini CLI | `.gemini/skills` | `gemini -p` |
-| Factory Droid | `.factory/skills` | `droid exec` |
+| Harness | Skill folder | Headless run | Tested |
+|---|---|---|---|
+| Claude Code | `.claude/skills` | `claude -p` | Locally evaluated |
+| GitHub Copilot CLI | `.agents/skills` (also reads `.github/skills` and `.claude/skills`) | `copilot -p` | CI-evaluated |
+| OpenAI Codex | `.agents/skills` | `codex exec` | Format-compatible |
+| OpenCode | `.opencode/skills` (also reads `.claude` and `.agents`) | `opencode run` | Format-compatible |
+| Pi | `.agents/skills` | `pi -p` | Format-compatible |
+| Cursor CLI | `.cursor/skills` | `cursor-agent -p` | Format-compatible |
+| Gemini CLI | `.gemini/skills` | `gemini -p` | Format-compatible |
+| Factory Droid | `.factory/skills` | `droid exec` | Format-compatible |
 
-GitHub Copilot CLI runs the agent evals in CI. Claude Code uses the same eval harness, but this repository's CI has no Anthropic key yet, so Claude Code evals run locally (see [Tests](#tests)). The others read the same `SKILL.md` format; reports from users are welcome.
+CI-evaluated means agent evals run in CI; locally evaluated means they run locally using the same eval harness (see [Tests](#tests)). Format-compatible means the harness reads the same `SKILL.md` format but has not yet been evaluated.
+
+When execution is allowed, `aiwerk-dispatch` uses the single harness configured in `aiwerk.md` with one git worktree per task, so tasks can run in parallel within dependency waves.
 
 ### Installing per harness
 
