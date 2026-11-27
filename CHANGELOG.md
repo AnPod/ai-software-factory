@@ -4,8 +4,17 @@ All notable changes to AI Werk Skills are recorded here.
 
 ## [Unreleased]
 
+### Added
+
+- README includes a workflow diagram, examples for several kinds of projects, an explanation of how the brain stays current, and installation notes for Pi, Cursor CLI, Gemini CLI and Factory Droid.
+
+### Security
+
+- Agent evals stage only `results.json` and `summary.md` for upload after symlink and key checks; raw transcripts stay on the runner. Security documentation now describes scan uploads and workflow permissions accurately.
+
 ### Changed
 
+- Agent evals on pull requests and pushes select cases for changed skills, or a smoke set for shared eval infrastructure changes. Scheduled and default manual runs still cover all cases.
 - Recipes pin `AIWERK_REF` to the v0.5.1 commit, so agents in CI can run the brain checker.
 
 ## [0.5.1] - 2026-11-20
