@@ -78,6 +78,34 @@ AGENT_ENV = (
 )
 HARNESS_KEYS = {"claude": ("ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL"), "copilot": ("COPILOT_GITHUB_TOKEN",)}
 
+DIAGNOSTIC_TAIL = 300
+TOKEN_SHAPE_RE = re.compile(
+    r"gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{40,}|sk-ant-[A-Za-z0-9_-]{20,}"
+)
+
+
+def sanitize_diagnostic(text):
+    """Return a short, single-line diagnostic safe for CI logs and uploaded results."""
+    if not text or not str(text).strip():
+        return ""
+    out = str(text)
+    for var in [v.strip() for v in TOKEN_VARS.split(",") if v.strip()]:
+        val = os.environ.get(var, "")
+        if len(val) >= 6:
+            out = out.replace(val, "[redacted]")
+    for keys in HARNESS_KEYS.values():
+        for key in keys:
+            if key == "ANTHROPIC_BASE_URL":
+                continue
+            val = os.environ.get(key, "")
+            if len(val) >= 6:
+                out = out.replace(val, "[redacted]")
+    out = TOKEN_SHAPE_RE.sub("[redacted-token]", out)
+    out = re.sub(r"\s+", " ", out).strip()
+    if len(out) > DIAGNOSTIC_TAIL:
+        out = out[-DIAGNOSTIC_TAIL:]
+    return out
+
 
 def agent_env(harness, case):
     keys = HARNESS_KEYS.get(harness, ())
@@ -1180,6 +1208,18 @@ def agent_command(args, prompt):
     return cmd, prompt
 
 
+def _exit_check_detail(code, stderr_text, stdout_text, output):
+    if code == 0:
+        return "0"
+    raw = (stderr_text or "").strip() or (stdout_text or "").strip() or (output or "").strip()
+    diag = sanitize_diagnostic(raw)
+    if code == "timeout":
+        return "timeout" if not diag else "timeout: %s" % diag
+    if diag:
+        return "exit %s: %s" % (code, diag)
+    return str(code)
+
+
 def run_case(name, args, workdir):
     case = CASES[name]
     project = make_project(workdir, "custom" if args.agent_cmd else args.harness)
@@ -1187,17 +1227,25 @@ def run_case(name, args, workdir):
     before = tree_hash(os.path.join(project, ".aiwerk")) if case["seed"] else None
     env = agent_env("custom" if args.agent_cmd else args.harness, name)
     start = time.time()
+    stdout_text, stderr_text = "", ""
     try:
         argv, stdin = agent_command(args, case["prompt"])
         r = subprocess.run(argv, cwd=project, input=stdin, capture_output=True, text=True,
                            timeout=args.timeout, env=env, stdin=None if stdin is not None else subprocess.DEVNULL)
-        output, code = r.stdout + "\n" + r.stderr, r.returncode
+        stdout_text, stderr_text = r.stdout or "", r.stderr or ""
+        output, code = stdout_text + "\n" + stderr_text, r.returncode
     except subprocess.TimeoutExpired as e:
-        output, code = (e.stdout or "") if isinstance(e.stdout, str) else "", "timeout"
+        stdout_text = e.stdout if isinstance(e.stdout, str) else (e.stdout.decode("utf-8", errors="replace") if e.stdout else "")
+        stderr_text = e.stderr if isinstance(e.stderr, str) else (e.stderr.decode("utf-8", errors="replace") if e.stderr else "")
+        output, code = stdout_text + "\n" + stderr_text, "timeout"
     seconds = round(time.time() - start)
     write(os.path.join(RESULTS, "transcripts", name + ".txt"), output)
     checks = check_case(name, project, output, before)
-    checks.insert(0, {"check": "agent exits cleanly", "ok": code == 0, "detail": str(code)})
+    checks.insert(0, {
+        "check": "agent exits cleanly",
+        "ok": code == 0,
+        "detail": _exit_check_detail(code, stderr_text, stdout_text, output),
+    })
     return {"case": name, "seconds": seconds, "passed": all(c["ok"] for c in checks), "checks": checks}
 
 
@@ -1248,7 +1296,12 @@ def main():
         status = "PASS" if res["passed"] else "FAIL"
         print("%s %s (%ds)" % (status, name, res["seconds"]))
         for c in res["checks"]:
-            print("   %s %s" % ("ok  " if c["ok"] else "FAIL", c["check"]))
+            if c["ok"]:
+                print("   ok  %s" % c["check"])
+            elif c.get("detail"):
+                print("   FAIL %s (%s)" % (c["check"], c["detail"]))
+            else:
+                print("   FAIL %s" % c["check"])
 
     write(os.path.join(RESULTS, "results.json"), json.dumps({"harness": harness, "results": results}, indent=2))
     md = summary_markdown(results, harness)
